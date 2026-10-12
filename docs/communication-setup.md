@@ -57,4 +57,18 @@ PWA can receive a push call alert with Answer/Decline actions where supported. A
 
 iOS currently retains ordinary call alerts and in-app WebRTC. True iOS closed-app calls require PushKit VoIP tokens, CallKit reporting, APNs VoIP credentials/entitlements and device testing; these are not included in this Android implementation.
 
-Live browser push test: `node scripts/live-fcm.mjs` creates a temporary test pair, grants notification permission in a separate regular Chrome profile, closes every PWA tab without signing out, and verifies two separate chat alerts, two choice alerts, audio/video incoming-call actions and cancellation. Test sessions are revoked only after assertions. Report: `artifacts/live-fcm-result.json`. Browser must remain running; private browsing, browser force-stop or OS restrictions can prevent push.
+Live browser push test: `node scripts/live-fcm.mjs` creates a dedicated test pair, grants notification permission in a separate regular Chrome profile, closes every PWA tab without signing out, and verifies two separate chat alerts, two choice alerts, audio/video incoming-call actions and cancellation. Test sessions are revoked only after assertions. Report: `artifacts/live-fcm-result.json`. Browser must remain running; private browsing, browser force-stop or OS restrictions can prevent push. OS notification permission must also allow Chrome; browser permission alone does not prove a notification appeared.
+
+For a Linux test server with Google Chrome, Xvfb, Dunst and optional Scrot installed, run a separate notification desktop. The test fixture disables OS-level duplicate grouping and notification timeouts so alerts can be counted independently:
+
+```sh
+xvfb-run -a -s '-screen 0 1280x1024x24' dbus-run-session -- sh -c '
+  dunst -conf scripts/live-fcm-dunstrc & daemon=$!
+  LIVE_SCREENSHOT=1 node scripts/live-fcm.mjs
+  result=$?
+  kill "$daemon"
+  exit "$result"
+'
+```
+
+Actual deployed Chrome test passed: two chat alerts, two choice alerts, audio/video call alerts with actions, and cancellation removal. Screenshot: `artifacts/live-fcm-notifications.png`. Native Android/iOS device delivery still requires separate device testing.
