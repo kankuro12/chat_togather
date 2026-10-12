@@ -421,7 +421,11 @@ calendar-input{min-width:0;display:block;}
 .carousel-rating{display:flex;gap:4px;}
 .carousel-rating button{flex:1;min-width:0;padding:4px;min-height:44px;font-size:12px;}
 .carousel-rating .selected{background:var(--color-accent);color:var(--color-accent-ink);}
-.chat-choice-image{display:block;width:64px;height:64px;padding:0;background:transparent;}
+.chat-choice-thumbnails{display:flex;flex-wrap:wrap;gap:6px;max-width:204px;}
+.chat-history{align-self:center;flex-shrink:0;}
+.chat-choice-open{margin-top:4px;color:inherit;}
+.chat-window .message-options .media-option{flex:0 0 44px;min-width:44px;min-height:44px;border-radius:50%;}
+.chat-choice-image{display:block;flex:0 0 64px;width:64px;height:64px;padding:0;background:transparent;}
 .chat-choice-image media-view,.chat-choice-image img{width:64px;height:64px;object-fit:contain;margin:0;}
 .choice-bubble>.text-button{color:inherit;text-decoration:underline;padding:4px 0;margin-top:4px;}
 @media(max-width:375px){.compact-choice-picker{grid-template-columns:repeat(2,minmax(0,1fr));}.choice-mini-images{max-width:200px;}}

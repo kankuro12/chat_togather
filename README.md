@@ -2,9 +2,11 @@
 
 Private space for one paired couple: live chat, images/videos, image choices and ratings, shared plans, trip itineraries and packing lists.
 
-**Stack:** Node 24.3+ / Express / Socket.IO / SQLite; Ionic 8 / Angular 20 / Capacitor 7 for web, Android and iOS. No database service required.
+**Stack:** Node 24.3+ / Express / Socket.IO / MySQL; Ionic 8 / Angular 20 / Capacitor 7 for web, Android and iOS. MySQL 8.0+ required; SQLite remains available for local tests and imports.
 
 ## Run locally
+
+Configure the MySQL connection below and create its database, then:
 
 ```sh
 npm install
@@ -53,6 +55,21 @@ API trusts exactly one reverse proxy for client IPs. Keep API reachable only thr
 
 Optional `server/.env` (see `server/.env.example`): port, host, database file, allowed origins. Origins must be exact comma-separated values. Keep native origins for packaged apps.
 
+Configure MySQL in `server/.env` before starting API or worker:
+
+```dotenv
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=together
+DB_USERNAME=together
+DB_PASSWORD=your-password
+```
+
+Create an empty database with `CREATE DATABASE together CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;` and grant the configured user access. Startup creates application tables. Optional `DATABASE_URL=mysql://user:password@host:3306/together` overrides connection fields. Use the same database configuration for API, worker, and job-status commands. `DB_CONNECTION=sqlite` with `DB_PATH=data/together.db` enables the local SQLite backend.
+
+To import existing SQLite data: stop API and worker, back up `server/data`, configure an empty MySQL database, then run `npm run migrate:sqlite -w server` (optional source path: `npm run migrate:sqlite -w server -- data/together.db`). Import preserves IDs, sessions, pending database jobs, and upload references. It leaves the source file unchanged, refuses a nonempty target, and rolls back on failure. Keep `server/data/uploads` available; media files stay on disk. Restart API and worker after import. Redis data remains in its configured Redis instance.
+
 Sessions and background jobs share one storage toggle in `server/.env`:
 
 ```dotenv
@@ -62,9 +79,11 @@ REDIS_URL=redis://127.0.0.1:6379
 REDIS_PREFIX=together
 ```
 
-`db` (default) uses the existing SQLite database; `redis` uses Redis 6.2+ and BullMQ. Application records and push device registrations still use SQLite. Keep the same settings and `DB_PATH` for API, worker (`npm run worker -w server`), and job status (`npm run jobs -w server`). Restart API and worker after changing settings. Each backend keeps its own sessions and pending jobs; switching requires signing in again and does not move jobs. Drain pending jobs before switching. Enable Redis persistence and use a `noeviction` policy to retain sessions and jobs across Redis restarts. Use a distinct `REDIS_PREFIX` for each deployment.
+`db` (default) stores sessions and jobs in the configured application database; `redis` uses Redis 6.2+ and BullMQ. Application records and push device registrations always stay in the application database. Keep the same database and storage settings for API, worker (`npm run worker -w server`), and job status (`npm run jobs -w server`). Restart API and worker after changing settings. Each storage backend keeps its own sessions and pending jobs; switching storage backends does not move them. Drain pending jobs before switching. Enable Redis persistence and use a `noeviction` policy to retain sessions and jobs across Redis restarts. Use a distinct `REDIS_PREFIX` for each deployment.
 
 Run Redis integration tests with `TEST_REDIS_URL` set to a test Redis instance; tests use isolated key prefixes and remove only their own keys.
+
+Run MySQL integration tests with `TEST_MYSQL_URL` set to a connection URL whose user can create/drop test databases. Tests create isolated `together_test_*` databases and remove only those databases.
 
 ## Mobile
 
@@ -95,7 +114,7 @@ Research, priorities and architecture: `docs/superpowers/specs/2026-10-11-couple
 
 Only authenticated members can read/write their couple resources and media. Server operators can access stored content; **not end-to-end encrypted**. No public directory or location tracking. Sessions live in browser/WebView local storage; use trusted devices and HTTPS. Android backup disabled.
 
-SQLite targets one server. Latest 100 messages load with older-history pagination. Gallery shows latest 200 files, decisions latest 100, plans latest 500 and trips latest 200; records remain on disk. Storage/backups and lifecycle policies remain deployment responsibilities. No background push, calls, booking imports or route optimization. Offline sending is not implemented; failed sends retain text for retry.
+API keeps active calls and location state in memory; media stays on disk. Run one API instance unless shared media and realtime coordination are added. Multiple workers can use the same MySQL or Redis queue. Latest 100 messages load with older-history pagination. Gallery shows latest 200 files, decisions latest 100, plans latest 500 and trips latest 200; records remain on disk. Storage/backups and lifecycle policies remain deployment responsibilities. Offline sending is not implemented; failed sends retain text for retry.
 
 Older office-chat documents in `docs/legacy` are historical and do not describe this app.
 
@@ -113,3 +132,5 @@ Every image uploaded through Chat, Choices or Memories converts to WebP before t
 New phone users who enter through Sign in finish name setup after OTP verification. Setup survives reloads and must finish before pairing; returning named users skip it.
 
 Choice images stay out of Memories. Choices appear in a compact status list; image thumbnails open a carousel. Choose an image, then Send choice to post selection to Chat. Sharing new choices also posts a linked Chat message. Image captions are optional in API and omitted from UI. Repeated identical votes and retried creates do not duplicate Chat entries.
+
+Choices has its own notification and pending-count badge. The badge counts your partner's choices awaiting your answer, including entries beyond the displayed list. Viewing Choices or reading Chat does not clear it. Choosing one image clears a choose request; rating every image clears a rating request. New-choice alerts open Choices, remain available while reading Chat, and queued push alerts are skipped once answered. Background push uses the existing Firebase setup.

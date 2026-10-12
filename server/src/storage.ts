@@ -1,4 +1,4 @@
-import type {DatabaseSync} from 'node:sqlite';
+import type {Database} from './db.js';
 import {Redis} from 'ioredis';
 import {jobQueue} from './jobs.js';
 import {redisQueue} from './redis-jobs.js';
@@ -16,17 +16,15 @@ export function storageOptions(env:NodeJS.ProcessEnv=process.env):StorageOptions
 export function validateStorage(options:StorageOptions){
   if(options.driver!==undefined&&options.driver!=='db'&&options.driver!=='redis')throw new Error('STORAGE_DRIVER must be db or redis.');
 }
-export function databaseSessions(db:DatabaseSync):Sessions{
+export function databaseSessions(db:Database):Sessions{
   return {
-    create:(key,user,expires)=>{db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(key,user,expires);},
-    get:key=>{const row=db.prepare('SELECT user_id,expires_at FROM sessions WHERE token_hash=? AND expires_at>?').get(key,Date.now());return row?{userId:row.user_id as string,expiresAt:row.expires_at as number}:undefined;},
-    delete:key=>{db.prepare('DELETE FROM sessions WHERE token_hash=?').run(key);},
+    create:async(key,user,expires)=>{await db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(key,user,expires);},
+    get:async key=>{const row=await db.prepare('SELECT user_id,expires_at FROM sessions WHERE token_hash=? AND expires_at>?').get(key,Date.now());return row?{userId:row.user_id as string,expiresAt:row.expires_at as number}:undefined;},
+    delete:async key=>{await db.prepare('DELETE FROM sessions WHERE token_hash=?').run(key);},
   };
 }
-export function createStorage(db:DatabaseSync,options:StorageOptions={}){
+export function createStorage(db:Database,options:StorageOptions={}){
   validateStorage(options);
-  // Reading indicators remain shared with push tokens in the application database.
-  db.exec('CREATE TABLE IF NOT EXISTS chat_reading(session_hash TEXT PRIMARY KEY,expires_at INTEGER NOT NULL)');
   if(options.driver!=='redis')return {sessions:databaseSessions(db),queue:jobQueue(db),ready:async()=>{},close:async()=>{}};
   const prefix=options.prefix||'together';
   const redis=new Redis(options.redisUrl||'redis://127.0.0.1:6379',{lazyConnect:true,maxRetriesPerRequest:1,enableOfflineQueue:false,connectTimeout:5000});

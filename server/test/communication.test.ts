@@ -9,7 +9,7 @@ const event=(socket:Socket,name:string)=>new Promise<any>(resolve=>socket.once(n
 const emit=(socket:Socket,name:string,data:any)=>new Promise<any>(resolve=>socket.timeout(3000).emit(name,data,(_error:any,result:any)=>resolve(result)));
 test('calls and live locations stay inside pair; logout removes notification registration',async()=>{
   const deliveries:{tokens:string[];kind:string}[]=[];
-  const s=createApp({databasePath:':memory:',uploadDir:'unused',origins:[],communication:{sendPush:async(tokens,kind)=>{deliveries.push({tokens,kind});return [];}}});let sockets:Socket[]=[];
+  const s=await createApp({databasePath:':memory:',uploadDir:'unused',origins:[],communication:{sendPush:async(tokens,kind)=>{deliveries.push({tokens,kind});return [];}}});let sockets:Socket[]=[];
   try{
     await new Promise<void>(resolve=>s.server.listen(0,'127.0.0.1',resolve));const api=request(s.server),port=(s.server.address() as any).port;
     const accounts:any[]=[];for(const name of ['caller','partner','outsider'])accounts.push((await api.post('/api/auth/register').send({name,email:name+'@comm.test',password:'password-12345'})).body);
@@ -30,7 +30,7 @@ test('calls and live locations stay inside pair; logout removes notification reg
     await api.post('/api/notifications/token').set(headers(1)).send({token:'partner-token-12345678901234567890'});
     await api.post('/api/messages').set(headers(0)).send({text:'Private message',client_id:'push-test'});
     await api.post('/api/messages').set(headers(0)).send({text:'Private message',client_id:'push-test'});
-    assert.equal(s.db.prepare('SELECT count(*) AS n FROM jobs').get()?.n,1);
+    assert.equal((await s.db.prepare('SELECT count(*) AS n FROM jobs').get())?.n,1);
     while(await jobQueue(s.db).runOne({push:pushHandler(s.db,async(tokens,kind)=>{deliveries.push({tokens,kind});return [];})})){}
     assert.deepEqual(deliveries.at(-1),{tokens:['partner-token-12345678901234567890'],kind:'message'});
     const before=deliveries.length,read=(await api.post('/api/messages').set(headers(0)).send({text:'Read before delivery',client_id:'read-later'})).body;
@@ -41,7 +41,7 @@ test('calls and live locations stay inside pair; logout removes notification reg
     await api.delete('/api/notifications/token').set(headers(1));
     while(await jobQueue(s.db).runOne({push:pushHandler(s.db,async(tokens,kind)=>{deliveries.push({tokens,kind});return [];})})){}
     assert.equal(deliveries.length,before);
-    assert.equal(s.db.prepare('SELECT count(*) AS n FROM push_tokens').get()?.n,1);
-    await api.post('/api/auth/logout').set(headers(0)).send({});assert.equal(s.db.prepare('SELECT count(*) AS n FROM push_tokens').get()?.n,0);
-  }finally{sockets.forEach(socket=>socket.disconnect());await new Promise<void>(resolve=>s.io.close(()=>resolve()));s.db.close();}
+    assert.equal((await s.db.prepare('SELECT count(*) AS n FROM push_tokens').get())?.n,1);
+    await api.post('/api/auth/logout').set(headers(0)).send({});assert.equal((await s.db.prepare('SELECT count(*) AS n FROM push_tokens').get())?.n,0);
+  }finally{sockets.forEach(socket=>socket.disconnect());await new Promise<void>(resolve=>s.io.close(()=>resolve()));await s.db.close();}
 });

@@ -1,12 +1,12 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import request from 'supertest';import {io,Socket} from 'socket.io-client';import {createApp} from '../src/app.js';import {jobQueue} from '../src/jobs.js';import {pushHandler} from '../src/push-job.js';
 test('offline recipient gets expiring call job, can decline, and expired calls never ring',async()=>{
-const app=createApp({databasePath:':memory:',uploadDir:'unused',origins:[]});let socket:Socket|undefined;
+const app=await createApp({databasePath:':memory:',uploadDir:'unused',origins:[]});let socket:Socket|undefined;
 try{await new Promise<void>(r=>app.server.listen(0,'127.0.0.1',r));const api=request(app.server),users:any[]=[];for(const name of ['CallA','CallB','Other'])users.push((await api.post('/api/auth/register').send({name,email:name+'@call-test.invalid',password:'safe-password-123'})).body);
 const auth=(i:number)=>({Authorization:'Bearer '+users[i].token});const invite=await api.post('/api/pair/invite').set(auth(0)).send({});await api.post('/api/pair/join').set(auth(1)).send({code:invite.body.code});await api.post('/api/notifications/token').set(auth(1)).send({token:'offline-recipient-device-1234567890'});
 socket=io('http://127.0.0.1:'+(app.server.address() as any).port,{auth:{token:users[0].token},transports:['websocket']});await new Promise<void>(r=>socket!.once('connect',r));const start=()=>new Promise<any>(r=>socket!.emit('call:start',{kind:'audio'},r));
 const call=await start();assert.equal(call.ok,true);const incoming=await api.get('/api/communication/calls/incoming').set(auth(1));assert.equal(incoming.body[0].id,call.id);assert.equal((await api.get('/api/communication/calls/'+call.id).set(auth(2))).status,403);
 const sent:any[]=[];const handler=pushHandler(app.db,async(tokens,kind,event,data)=>{sent.push({kind,data});return [];});await jobQueue(app.db).runOne({push:handler});assert.equal(sent[0].kind,'call');assert.equal(sent[0].data.id,call.id);
 assert.equal((await api.post('/api/communication/calls/'+call.id+'/decline').set(auth(1)).send({})).status,200);assert.equal((await api.get('/api/communication/calls/incoming').set(auth(1))).body.length,0);await jobQueue(app.db).runOne({push:handler});assert.equal(sent.at(-1).kind,'call_cancel');
-const expired=await start();app.db.prepare('UPDATE incoming_calls SET expires_at=0 WHERE id=?').run(expired.id);await jobQueue(app.db).runOne({push:handler});assert.equal(sent.length,2);assert.equal((await api.get('/api/communication/calls/'+expired.id).set(auth(1))).status,409);
-}finally{socket?.disconnect();await new Promise<void>(r=>app.io.close(()=>r()));app.db.close();}
+const expired=await start();await app.db.prepare('UPDATE incoming_calls SET expires_at=0 WHERE id=?').run(expired.id);await jobQueue(app.db).runOne({push:handler});assert.equal(sent.length,2);assert.equal((await api.get('/api/communication/calls/'+expired.id).set(auth(1))).status,409);
+}finally{socket?.disconnect();await new Promise<void>(r=>app.io.close(()=>r()));await app.db.close();}
 });

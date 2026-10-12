@@ -6,7 +6,7 @@ import request from 'supertest';
 import {io,Socket} from 'socket.io-client';
 import {createApp} from '../src/app.js';
 test('unread persists, reads cannot move backwards or cross couples; reading sessions suppress only message push',async()=>{
-const sent:any[]=[];const app=createApp({databasePath:':memory:',uploadDir:'unused',origins:[],communication:{sendPush:async(tokens,kind)=>{sent.push({tokens,kind});return [];}}});let socket:Socket|undefined;
+const sent:any[]=[];const app=await createApp({databasePath:':memory:',uploadDir:'unused',origins:[],communication:{sendPush:async(tokens,kind)=>{sent.push({tokens,kind});return [];}}});let socket:Socket|undefined;
 try{
 await new Promise<void>(r=>app.server.listen(0,'127.0.0.1',r));const api=request(app.server),users:any[]=[];
 for(const name of ['reader','sender','outsider'])users.push((await api.post('/api/auth/register').send({name,email:name+'@reading.test',password:'safe-password-123'})).body);
@@ -41,5 +41,5 @@ socket.disconnect();await new Promise(r=>setTimeout(r,30));
 await api.post('/api/messages').set(auth(1)).send({text:'Closed',client_id:'closed'});
 while(await jobQueue(app.db).runOne({push:pushHandler(app.db,async(tokens,kind)=>{sent.push({tokens,kind});return [];})})){}
 assert.equal(sent.length,5);
-}finally{socket?.disconnect();await new Promise<void>(r=>app.io.close(()=>r()));app.db.close();}
+}finally{socket?.disconnect();await new Promise<void>(r=>app.io.close(()=>r()));await app.db.close();}
 });

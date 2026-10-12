@@ -8,7 +8,8 @@
     "build": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
     "worker": "tsx src/worker.ts",
-    "jobs": "tsx src/job-status.ts"
+    "jobs": "tsx src/job-status.ts",
+    "migrate:sqlite": "tsx src/migrate-sqlite.ts"
   },
   "dependencies": {
     "bullmq": "^6.3.13",
@@ -20,6 +21,7 @@
     "helmet": "^8.1.0",
     "ioredis": "^6.0.0",
     "multer": "^2.0.2",
+    "mysql2": "^3.24.5",
     "socket.io": "^4.8.1",
     "zod": "^4.1.0"
   },

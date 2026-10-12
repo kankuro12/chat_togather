@@ -5,7 +5,7 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import helmet from 'helmet';
 import { ZodError } from 'zod';
-import { openDatabase } from './db.js';
+import { openDatabase,type DatabaseOptions } from './db.js';
 import { context, HttpError } from './context.js';
 import { authRoutes, pairRoutes } from './auth.js';
 import { chatRoutes, realtime } from './chat.js';
@@ -18,13 +18,15 @@ import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import { resolve } from 'node:path';
 import { externalAuthRoutes, AuthOptions } from './external-auth.js';
 import {createStorage,validateStorage,type StorageOptions} from './storage.js';
-export function createApp(options: {databasePath:string;uploadDir:string;origins:string[];webDir?:string;auth?:AuthOptions;communication?:CommunicationOptions;storage?:StorageOptions}) {
+export async function createApp(options: {databasePath?:string;database?:DatabaseOptions;uploadDir:string;origins:string[];webDir?:string;auth?:AuthOptions;communication?:CommunicationOptions;storage?:StorageOptions}) {
   validateStorage(options.storage||{});
   const app=express();
   app.set('trust proxy',1);
   app.disable('x-powered-by'); app.use(helmet({contentSecurityPolicy:{directives:{imgSrc:["'self'",'data:','blob:'],connectSrc:["'self'",'https://firebaseinstallations.googleapis.com','https://fcmregistrations.googleapis.com'],mediaSrc:["'self'",'blob:'],upgradeInsecureRequests:null}}}),cors({origin:options.origins,credentials:true}),express.json({limit:'64kb'}));
   const server=createServer(app); const io=new Server(server,{cors:{origin:options.origins},maxHttpBufferSize:64*1024});
-  const db=openDatabase(options.databasePath),storage=createStorage(db,options.storage); const c=context(db,io,options.uploadDir,storage);const comm=communication(c,options.communication);
+  const db=await openDatabase(options.database||options.databasePath||{driver:'mysql'}),storage=createStorage(db,options.storage);
+  await db.prepare("UPDATE incoming_calls SET state='ended' WHERE state!='ended'").run();
+  const c=context(db,io,options.uploadDir,storage);const comm=communication(c,options.communication);
   app.use('/api',(_req,res,next)=>{res.set('Cache-Control','no-store');next();});
   app.get('/api/health',(_req,res)=>res.json({ok:true}));
   app.use('/api/auth',externalAuthRoutes(c,options.auth));

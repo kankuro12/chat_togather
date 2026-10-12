@@ -10,10 +10,11 @@ export class Api {
   user=signal<User|null>(null);pair=signal<Pair|null>(null);booting=signal(true);busy=signal(false);error=signal('');
   messages=signal<Message[]>([]);media=signal<Media[]>([]);decisions=signal<Decision[]>([]);plans=signal<Plan[]>([]);trips=signal<Trip[]>([]);
   connected=signal(false);online=signal<string[]>([]);typing=signal('');
-  unread=signal(0);chatReading=signal(false);partnerRead=signal<{id:string;created_at:string}|null>(null);private lastRead='';private readingPending=false;private readSequence=0;
+  unread=signal(0);pendingChoices=signal(0);pendingChoicesReady=signal(false);chatReading=signal(false);partnerRead=signal<{id:string;created_at:string}|null>(null);private lastRead='';private readingPending=false;private readSequence=0;private pendingSequence=0;
   setChatReading(active:boolean){this.chatReading.set(active);this.socket?.emit('chat:view',active);if(active)void this.readLatest();}
   async readLatest(){const latest=this.messages().at(-1);if(!this.chatReading()||!latest||this.lastRead===latest.id||this.readingPending)return;const token=this.token;this.readingPending=true;let success=false;try{await this.request('/messages/read',{message_id:latest.id});if(token!==this.token)return;this.lastRead=latest.id;success=true;await this.readState();}catch(e){if(token===this.token)this.error.set(this.message(e));}finally{this.readingPending=false;if(success&&token===this.token&&this.messages().at(-1)?.id!==latest.id)void this.readLatest();}}
   async readState(){const token=this.token,sequence=++this.readSequence;const state=await this.request('/messages/read-state');if(token!==this.token||sequence!==this.readSequence)return;this.unread.set(state.unread);this.partnerRead.set(state.partner);}
+  async refreshPendingChoices(){const token=this.token,pairId=this.pair()?.id,sequence=++this.pendingSequence;const state=await this.request<{count:number}>('/decisions/pending');if(token!==this.token||pairId!==this.pair()?.id||sequence!==this.pendingSequence)return;this.pendingChoices.set(Number(state.count)||0);this.pendingChoicesReady.set(true);}
   seen(message:Message){const read=this.partnerRead();return !!read&&(read.created_at>message.created_at||(read.created_at===message.created_at&&read.id>=message.id));}
   partner=computed(()=>this.pair()?.members.find(m=>m.id!==this.user()?.id));
   token=localStorage.getItem('together.session')||'';
@@ -56,7 +57,7 @@ export class Api {
     sessionStorage.setItem('together.oauth',verifier);location.assign(result.url);
   }
   async logout(){await this.request('/auth/logout',{});this.forget();}
-  private forget(){this.unread.set(0);this.partnerRead.set(null);this.chatReading.set(false);this.lastRead='';this.socket?.disconnect();this.socket?.removeAllListeners();this.socket=undefined;clearTimeout(this.typingTimer);this.token='';localStorage.removeItem('together.session');this.user.set(null);this.pair.set(null);this.messages.set([]);this.media.set([]);this.decisions.set([]);this.plans.set([]);this.trips.set([]);this.connected.set(false);this.typing.set('');this.online.set([]);}
+  private forget(){this.unread.set(0);this.pendingChoices.set(0);this.pendingChoicesReady.set(false);this.pendingSequence++;this.partnerRead.set(null);this.chatReading.set(false);this.lastRead='';this.socket?.disconnect();this.socket?.removeAllListeners();this.socket=undefined;clearTimeout(this.typingTimer);this.token='';localStorage.removeItem('together.session');this.user.set(null);this.pair.set(null);this.messages.set([]);this.media.set([]);this.decisions.set([]);this.plans.set([]);this.trips.set([]);this.connected.set(false);this.typing.set('');this.online.set([]);}
   async reload(area?:string){
     if(!this.pair())return;
     const token=this.token;const pairId=this.pair()?.id;
@@ -68,7 +69,7 @@ export class Api {
       switch(resource){
         case 'messages':this.messages.set(data);await this.readState();break;
         case 'media':this.media.set(data);break;
-        case 'decisions':this.decisions.set(data);break;
+        case 'decisions':this.decisions.set(data);await this.refreshPendingChoices();break;
         case 'plans':this.plans.set(data);break;
         case 'trips':this.trips.set(data);break;
       }

@@ -15,7 +15,7 @@ function socketEvent(socket:Socket,event:string):Promise<any[]> {
 }
 
 const dir = mkdtempSync(join(tmpdir(), 'together-'));
-const system = createApp({ databasePath: join(dir, 'test.db'), uploadDir: join(dir, 'uploads'), origins: ['http://localhost:4200'] });
+const system = await createApp({ databasePath: join(dir, 'test.db'), uploadDir: join(dir, 'uploads'), origins: ['http://localhost:4200'] });
 const api = request(system.server);
 let a: any, b: any, outsider: any;
 async function register(name: string) {
@@ -24,7 +24,7 @@ async function register(name: string) {
 }
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 before(async () => { await new Promise<void>(resolve => system.server.listen(0, '127.0.0.1', resolve)); });
-after(async () => { await new Promise<void>(resolve => system.io.close(() => resolve())); system.db.close(); rmSync(dir, {recursive:true,force:true}); });
+after(async () => { await new Promise<void>(resolve => system.io.close(() => resolve())); await system.db.close(); rmSync(dir, {recursive:true,force:true}); });
 
 test('registration validates credentials and prevents duplicate email', async () => {
   assert.equal((await api.post('/api/auth/register').send({name:'A', email:'bad', password:'short'})).status,400);
@@ -143,7 +143,7 @@ test('second couple cannot read or mutate first couple resources or receive its 
 test('sessions that expire cannot receive subsequent realtime updates',async()=>{
   const address=system.server.address() as any;const socket=connect(`http://127.0.0.1:${address.port}`,{auth:{token:b.token},transports:['websocket']});
   try{await socketEvent(socket,'connect');let updates=0;socket.on('changed',()=>updates++);
-    system.db.prepare('UPDATE sessions SET expires_at=0 WHERE token_hash=?').run(hash(b.token));
+    await system.db.prepare('UPDATE sessions SET expires_at=0 WHERE token_hash=?').run(hash(b.token));
     await api.post('/api/messages').set(auth(a.token)).send({text:'After expiry',client_id:'after-expiry'});
     await new Promise(resolve=>setTimeout(resolve,100));assert.equal(updates,0);assert.equal(socket.connected,false);
   }finally{socket.disconnect();}
@@ -155,30 +155,30 @@ test('plan timestamps normalize precision before ordering',async()=>{
 });
 
 test('database persists across application instances',async()=>{
-  const second=createApp({databasePath:join(dir,'test.db'),uploadDir:join(dir,'uploads'),origins:[]});
+  const second=await createApp({databasePath:join(dir,'test.db'),uploadDir:join(dir,'uploads'),origins:[]});
   await new Promise<void>(resolve=>second.server.listen(0,'127.0.0.1',resolve));
   try{const history=await request(second.server).get('/api/messages').set(auth(a.token));assert.equal(history.status,200);assert.ok(history.body.some((m:any)=>m.text==='Only us'));assert.equal((await request(second.server).get('/api/trips').set(auth(a.token))).body[0].title,'Our escape');}
-  finally{await new Promise<void>(resolve=>second.io.close(()=>resolve()));second.db.close();}
+  finally{await new Promise<void>(resolve=>second.io.close(()=>resolve()));await second.db.close();}
 });
 
 test('production serves web app while keeping authenticated APIs private',async()=>{
-  const production=createApp({databasePath:join(dir,'test.db'),uploadDir:join(dir,'uploads'),origins:[],webDir:join(import.meta.dirname,'../../client/www')});
+  const production=await createApp({databasePath:join(dir,'test.db'),uploadDir:join(dir,'uploads'),origins:[],webDir:join(import.meta.dirname,'../../client/www')});
   await new Promise<void>(resolve=>production.server.listen(0,'127.0.0.1',resolve));
   try{const web=await request(production.server).get('/');assert.equal(web.status,200);assert.match(web.text,/<app-root>/);assert.ok(web.headers['content-security-policy'].includes('blob:'));
     const privateApi=await request(production.server).get('/api/messages');assert.equal(privateApi.status,401);assert.equal(privateApi.headers['cache-control'],'no-store');
-  }finally{await new Promise<void>(resolve=>production.io.close(()=>resolve()));production.db.close();}
+  }finally{await new Promise<void>(resolve=>production.io.close(()=>resolve()));await production.db.close();}
 });
 
 test('concurrent identical message retries return one persisted message',async()=>{
   const input={text:'Retry me',client_id:'concurrent-retry'};
   const results=await Promise.all([api.post('/api/messages').set(auth(a.token)).send(input),api.post('/api/messages').set(auth(a.token)).send(input)]);
   assert.deepEqual(results.map(r=>r.status).sort(),[200,201]);assert.equal(results[0].body.id,results[1].body.id);
-  assert.equal(system.db.prepare('SELECT COUNT(*) AS n FROM messages WHERE client_id=?').get(input.client_id)?.n,1);
+  assert.equal((await system.db.prepare('SELECT COUNT(*) AS n FROM messages WHERE client_id=?').get(input.client_id))?.n,1);
 });
 
 test('socket disconnects at session expiry without waiting for new content',async()=>{
   const login=await api.post('/api/auth/login').send({email:b.user.email,password:'safe-password-123'});
-  system.db.prepare('UPDATE sessions SET expires_at=? WHERE token_hash=?').run(Date.now()+800,hash(login.body.token));
+  await system.db.prepare('UPDATE sessions SET expires_at=? WHERE token_hash=?').run(Date.now()+800,hash(login.body.token));
   const address=system.server.address() as any,socket=connect(`http://127.0.0.1:${address.port}`,{auth:{token:login.body.token},transports:['websocket']});
   try{await socketEvent(socket,'connect');const disconnected=socketEvent(socket,'disconnect');await Promise.race([disconnected,new Promise((_,reject)=>setTimeout(()=>reject(new Error('Socket did not expire on time.')),1800))]);assert.equal(socket.connected,false);}
   finally{socket.disconnect();}
