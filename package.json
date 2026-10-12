@@ -1,0 +1,26 @@
+{
+  "name": "together",
+  "private": true,
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c magenta,cyan \"npm run dev -w server\" \"npm start -w client\"",
+    "start": "npm start -w server",
+    "build": "npm run build -w client && npm run build -w server",
+    "test": "tsx --test server/test/*.test.ts client/test/*.test.ts",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0",
+    "@playwright/test": "^1.56.0"
+  },
+  "engines": {
+    "node": ">=24.3.0",
+    "npm": ">=8.3.0"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.13.6"
+  }
+}

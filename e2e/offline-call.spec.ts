@@ -1,0 +1,10 @@
+import {test,expect,chromium} from '@playwright/test';
+test('offline call notification link reconnects and answers real WebRTC call',async({request,baseURL})=>{
+test.setTimeout(90000);const browser=await chromium.launch({channel:'chrome',headless:true,args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']});const aContext=await browser.newContext({baseURL,permissions:['microphone','camera']}),bContext=await browser.newContext({baseURL,permissions:['microphone','camera']});try{
+const register=async(name:string)=>(await request.post('/api/auth/register',{data:{name,email:name+Date.now()+'@offline-call.invalid',password:'safe-password-123'}})).json();const a=await register('CallBrowserA'),b=await register('CallBrowserB');const headers={Authorization:'Bearer '+b.token};const invite=await request.post('/api/pair/invite',{headers:{Authorization:'Bearer '+a.token},data:{}});await request.post('/api/pair/join',{headers,data:{code:(await invite.json()).code}});await request.post('/api/notifications/token',{headers,data:{token:'dummy-offline-browser-token-123456'}});
+await aContext.addInitScript(token=>localStorage.setItem('together.session',token),a.token);await bContext.addInitScript(token=>localStorage.setItem('together.session',token),b.token);
+const p=await aContext.newPage();await p.goto('/#chat');await p.getByRole('button',{name:'Audio call',exact:true}).click();await expect(p.getByRole('dialog',{name:'Partner call'}).getByRole('status')).toHaveText('Calling…');
+const incoming=await request.get('/api/communication/calls/incoming',{headers});const call=(await incoming.json())[0];expect(call.id).toBeTruthy();const q=await bContext.newPage();await q.goto('/#chat?call='+call.id+'&action=answer');
+await expect(q.getByRole('dialog',{name:'Partner call'}).getByRole('status')).toHaveText('Audio call',{timeout:25000});await expect(p.getByRole('dialog',{name:'Partner call'}).getByRole('status')).toHaveText('Audio call');await p.getByRole('button',{name:'End call'}).click();await expect(q.getByRole('dialog',{name:'Partner call'})).toHaveCount(0);
+}finally{await browser.close();}
+});

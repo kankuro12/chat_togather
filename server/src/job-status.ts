@@ -1,0 +1,3 @@
+import {resolve} from 'node:path';import {existsSync} from 'node:fs';import {openDatabase} from './db.js';import {jobQueue} from './jobs.js';
+const root=resolve(import.meta.dirname,'..');if(existsSync(resolve(root,'.env')))process.loadEnvFile(resolve(root,'.env'));const db=openDatabase(resolve(root,process.env.DB_PATH||'data/together.db'));jobQueue(db);
+console.table(db.prepare('SELECT state,count(*) AS count FROM jobs GROUP BY state').all());console.table(db.prepare('SELECT type,state,attempts,progress,error,created_at,finished_at FROM jobs ORDER BY created_at DESC LIMIT 20').all());db.close();

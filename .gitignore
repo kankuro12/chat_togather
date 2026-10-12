@@ -1,0 +1,85 @@
+# Dependencies
+node_modules/
+yarn.lock
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Uploads and data
+server/uploads/
+server/data/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+.fleet/
+*.swp
+*.swo
+*~
+
+# Build
+client/build/
+client/www/
+client/.angular/
+client/out-tsc/
+artifacts/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+dist/
+build/
+*.tsbuildinfo
+
+# Testing
+coverage/
+
+# Android build output
+*.apk
+*.aab
+*.ap_
+*.dex
+client/android/local.properties
+client/android/.gradle/
+client/android/build/
+client/android/.cxx/
+client/android/app/build/
+client/android/app/src/main/assets/public/
+client/android/app/src/main/assets/capacitor.config.json
+client/android/app/src/main/assets/capacitor.plugins.json
+
+# iOS build output
+client/ios/App/build/
+client/ios/App/Pods/
+client/ios/App/output/
+client/ios/App/App/public/
+client/ios/App/App/capacitor.config.json
+client/ios/DerivedData/
+client/ios/xcuserdata/
+
+# Signing keys and secrets
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
+*.p8
+*.pem
+*serviceaccount*.json
+serviceAccountKey.json
+
+# Firebase/native app configuration
+client/android/app/google-services.json
+client/ios/App/App/GoogleService-Info.plist

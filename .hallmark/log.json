@@ -1,0 +1,42 @@
+[
+  {
+    "date": "2026-10-12",
+    "macrostructure": "Login-first authentication",
+    "theme": "Bright coral, blush, teal",
+    "scope": "auth",
+    "enrichment": "none",
+    "brief": "Default entry and sign-out show login; signup only via Create account or #signup; Back to root returns to login"
+  },
+  {
+    "date": "2026-10-12",
+    "macrostructure": "Workbench / centered login / split signup",
+    "theme": "Bright coral, blush, teal",
+    "scope": "app",
+    "enrichment": "none",
+    "brief": "User-requested bright palette throughout; preserved layouts and flows; peach date tiles and teal partner/trip highlights"
+  },
+  {
+    "date": "2026-10-12",
+    "macrostructure": "Centered login / split signup",
+    "theme": "Together cream/plum",
+    "scope": "auth",
+    "enrichment": "none",
+    "brief": "Separate #login and #signup screens; contextual links replace mode tabs; browser Back supported; credentials/challenges cleared on mode switch"
+  },
+  {
+    "date": "2026-10-12",
+    "macrostructure": "Workbench",
+    "theme": "Together cream/plum",
+    "scope": "app",
+    "enrichment": "none",
+    "brief": "Compact whole-app redesign: task-first home, viewport chat, completed plans, itinerary/packing tabs, on-demand forms, concise labels"
+  },
+  {
+    "date": "2026-10-12",
+    "scope": "app",
+    "macrostructure": "Existing workbench and focused dialogs",
+    "theme": "Together bright coral/cream/teal",
+    "enrichment": "Original paired-conversation mark",
+    "brief": "Choices live camera with preview; honest notification setup status; unified PWA and push worker; Android icons and launch splash"
+  }
+]

@@ -1,0 +1,20 @@
+import {stat} from 'node:fs/promises';
+import {test,expect} from '@playwright/test';
+test('chat fills viewport, choices use separate route, image uploads are compressed WebP',async({page})=>{
+  const stamp=Date.now(),uploads:any[]=[];
+  page.on('response',response=>{if(response.url().split('?')[0].endsWith('/api/media')&&response.request().method()==='POST')void response.json().then(media=>uploads.push(media));});
+  await page.goto('/#signup');await page.getByRole('button',{name:'Email',exact:true}).click();await page.getByLabel('Your name').fill('Focused UI');await page.getByLabel('Email address').fill(`focused${stamp}@example.test`);await page.getByLabel('Password',{exact:true}).fill('safe-password-123');await page.getByRole('button',{name:'Create account',exact:true}).click();
+  await page.getByRole('button',{name:'Create invitation',exact:true}).click();const code=await page.getByTestId('invite-code').innerText();
+  const partner=await page.request.post('/api/auth/register',{data:{name:'Focused partner',email:`partner${stamp}@example.test`,password:'safe-password-123'}});const account=await partner.json();await page.request.post('/api/pair/join',{headers:{Authorization:'Bearer '+account.token},data:{code}});
+  await expect(page.getByRole('heading',{name:'Home',exact:true})).toBeVisible();await page.getByRole('button',{name:'Chat',exact:true}).click();await expect(page).toHaveURL(/#chat$/);await expect(page.getByRole('navigation',{name:'Main navigation'})).toHaveCount(0);await expect(page.locator('.topbar')).toHaveCount(0);await expect(page.getByRole('button',{name:'Add choice'})).toHaveCount(0);
+  for(const width of [320,375,414,768]){await page.setViewportSize({width,height:640});await expect(page.getByLabel('Message your partner')).toBeInViewport();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);}
+  await page.getByLabel('Attach image or video',{exact:true}).setInputFiles('artifacts/redesign-auth-375.png');await page.getByRole('button',{name:'Send message',exact:true}).click();await expect.poll(()=>uploads.length).toBe(1);expect(uploads[0].mime).toBe('image/webp');expect(uploads[0].size).toBeLessThan((await stat('artifacts/redesign-auth-375.png')).size);
+  await page.screenshot({path:'artifacts/focused-chat.png'});await page.getByRole('button',{name:'Back to app',exact:true}).click();await expect(page).toHaveURL(/#home$/);await page.getByRole('button',{name:'Choices',exact:true}).click();await expect(page).toHaveURL(/#choices$/);await expect(page.getByLabel('Message your partner')).toHaveCount(0);await page.getByRole('button',{name:'Add choice'}).click();await page.getByLabel('Choice title').fill('Compressed photos');await page.getByLabel('Choose decision images').setInputFiles(['artifacts/redesign-auth-375.png','artifacts/redesign-auth-375.png']);await page.getByRole('button',{name:'Share choice',exact:true}).click();await expect(page.locator('.choice-mini-images button')).toHaveCount(2);await expect.poll(()=>uploads.length).toBe(3);expect(uploads.every(media=>media.mime==='image/webp')).toBe(true);
+  await page.getByRole('button',{name:'Chat',exact:true}).click();await page.goBack();await expect(page).toHaveURL(/#choices$/);await page.getByRole('button',{name:'Memories',exact:true}).click();await page.getByLabel('Add a memory',{exact:true}).setInputFiles('artifacts/redesign-auth-375.png');await expect.poll(()=>uploads.length).toBe(4);expect(uploads[3].mime).toBe('image/webp');expect(uploads[3].size).toBeLessThan(uploads[0].size+1);
+});
+
+test('expired sign-in clears old token and gives a useful message',async({page})=>{
+  await page.addInitScript(()=>localStorage.setItem('together.session','expired-token'));
+  await page.route('**/api/auth/me',route=>route.fulfill({status:401,json:{error:'You’re signed out. Sign in to continue.'}}));await page.goto('/#home');
+  await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();await expect(page.getByRole('alert')).toContainText('Sign in to continue.');expect(await page.evaluate(()=>localStorage.getItem('together.session'))).toBeNull();
+});

@@ -1,0 +1,28 @@
+import {test,expect,chromium} from '@playwright/test';
+test('real paired calls, recording messages, location, compact images and BS dates',async({},info)=>{
+  test.skip(process.env.E2E_ISOLATED!=='1','Needs isolated API');test.setTimeout(120000);
+  const browser=await chromium.launch({channel:'chrome',headless:true,args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']});
+  const options={baseURL:info.project.use.baseURL as string,permissions:['camera','microphone','geolocation'],geolocation:{latitude:27.7172,longitude:85.324,accuracy:12}};
+  const first=await browser.newContext(options),second=await browser.newContext(options),a=await first.newPage(),b=await second.newPage();const errors:string[]=[];for(const page of [a,b])page.on('pageerror',e=>errors.push(e.message));
+  try{
+    const stamp=Date.now();for(const [page,name] of [[a,'Comm A'],[b,'Comm B']] as const){await page.goto('/#signup');await page.getByRole('button',{name:'Email',exact:true}).click();await page.getByLabel('Your name').fill(name);await page.getByLabel('Email address').fill(name.replace(' ','')+stamp+'@test.com');await page.getByLabel('Password',{exact:true}).fill('safe-password-123');await page.getByRole('button',{name:'Create account',exact:true}).click();await expect(page.getByRole('heading',{name:'Better with you'})).toBeVisible();}
+    await a.getByRole('button',{name:'Create invitation',exact:true}).click();const code=await a.getByTestId('invite-code').innerText();await b.getByRole('button',{name:'Join',exact:true}).click();await b.getByLabel('Partner invitation code').fill(code);await b.getByRole('button',{name:'Join your partner'}).click();
+    for(const page of [a,b]){await expect(page.getByRole('heading',{name:'Home',exact:true})).toBeVisible();await page.getByRole('button',{name:'Chat',exact:true}).click();}
+    for(const kind of ['Audio','Video']){
+      await a.getByRole('button',{name:kind+' call',exact:true}).click();await expect(b.getByText('Incoming '+kind.toLowerCase()+' call',{exact:true})).toBeVisible();await b.getByRole('button',{name:'Answer',exact:true}).click();
+      await expect(a.getByRole('dialog',{name:'Partner call'}).getByRole('status')).toHaveText(kind+' call',{timeout:20000});await expect(b.getByRole('dialog',{name:'Partner call'}).getByRole('status')).toHaveText(kind+' call');
+      await a.getByRole('button',{name:'Mute',exact:true}).click();await expect(a.getByRole('button',{name:'Unmute',exact:true})).toBeVisible();await a.getByRole('button',{name:'End call',exact:true}).click();await expect(b.getByRole('dialog',{name:'Partner call'})).toHaveCount(0);
+    }
+    for(const kind of ['Voice','Video']){
+      await a.getByRole('button',{name:'More message options'}).click();await a.getByRole('button',{name:kind+' message',exact:true}).click();const dialog=a.getByRole('dialog',{name:kind+' message',exact:true});await dialog.getByRole('button',{name:'Record',exact:true}).click();await expect(dialog.getByRole('status')).toContainText('1s');await dialog.getByRole('button',{name:'Stop recording',exact:true}).click();await dialog.getByRole('button',{name:'Use recording',exact:true}).click();await a.getByRole('button',{name:'Send message',exact:true}).click();
+      await expect(b.locator(kind==='Voice'?'.conversation audio':'.conversation video')).toBeVisible();
+    }
+    await a.getByRole('button',{name:'More message options'}).click();await a.getByRole('button',{name:'Live location',exact:true}).click();await a.getByRole('button',{name:'15 minutes',exact:true}).click();await expect(b.getByRole('link',{name:'View map'})).toHaveAttribute('href',/27\.7172/);await a.getByRole('button',{name:'Stop sharing',exact:true}).click();await expect(b.getByRole('link',{name:'View map'})).toHaveCount(0);
+    await a.getByRole('button',{name:'Back to app',exact:true}).click();await a.getByRole('button',{name:'Choices',exact:true}).click();await a.getByRole('button',{name:'Add choice'}).click();await a.getByLabel('Choice title').fill('Small image grid');await a.getByLabel('Choose decision images').setInputFiles(['artifacts/redesign-auth-375.png','artifacts/redesign-auth-375.png']);await expect(a.locator('.option-preview')).toHaveCount(2);await a.getByRole('button',{name:'Share choice',exact:true}).click();await expect(a.locator('.choice-mini-images button')).toHaveCount(2);
+    for(const width of [320,375,414,768]){await a.setViewportSize({width,height:800});expect(await a.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);}
+    await a.screenshot({path:'artifacts/communication-choices.png'});
+    await a.getByRole('button',{name:'Trips',exact:true}).click();await a.getByRole('button',{name:'New trip',exact:true}).click();await a.getByRole('button',{name:'BS',exact:true}).click();await a.getByLabel('Trip title').fill('BS trip');await a.getByLabel('Destination').fill('Pokhara');await a.getByLabel('Departure date (BS)',{exact:true}).fill('2083-07-01');await a.getByLabel('Return date (BS)',{exact:true}).fill('2083-07-02');await a.getByRole('button',{name:'Save trip',exact:true}).click();await expect(a.getByText('2083-07-01 BS – 2083-07-02 BS',{exact:true})).toBeVisible();
+    await a.getByRole('button',{name:'Memories',exact:true}).click();await expect(a.locator('.memories-grid .memory-card')).toHaveCount(1);await a.locator('.memory-open').first().click();await expect(a.getByRole('button',{name:'Close memory',exact:true})).toBeVisible();await a.getByRole('button',{name:'Close memory',exact:true}).click();
+    expect(errors).toEqual([]);
+  }finally{await browser.close();}
+});

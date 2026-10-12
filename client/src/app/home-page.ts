@@ -1,0 +1,16 @@
+import { CalendarDate } from './calendar';
+import { Component, inject, output, computed } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import { IonIcon } from '@ionic/angular/standalone';
+import { Api } from './api';
+import { MediaView } from './media-view';
+@Component({selector:'home-page',standalone:true,imports:[DatePipe,IonIcon,MediaView,CalendarDate],template:`
+<div class="page-heading"><div><h1>Home</h1><p>{{api.user()?.name}} & {{api.partner()?.name}}</p></div><button class="primary" (click)="navigate.emit('chat')">Open chat <ion-icon name="arrow-forward-outline"></ion-icon></button></div>
+<div class="home-agenda"><section class="card"><div class="section-title"><h2>Next plan</h2></div>@if(upcoming()[0];as plan){<button class="agenda-link" (click)="navigate.emit('plans')"><div class="date-tile"><span>{{plan.start_at|calendarDate:'MMM'}}</span><strong>{{plan.start_at|calendarDate:'d'}}</strong></div><div><h3>{{plan.title}}</h3><p>{{plan.start_at|calendarDate:'EEE'}} · {{plan.start_at|date:'shortTime'}}</p>@if(plan.location){<small>{{plan.location}}</small>}</div><ion-icon name="arrow-forward-outline"></ion-icon></button>}@else{<p class="subtle">No upcoming plans.</p><button class="text-button" (click)="navigate.emit('plans')">Make a plan <ion-icon name="arrow-forward-outline"></ion-icon></button>}</section>
+<section class="card"><div class="section-title"><h2>Next trip</h2></div>@if(nextTrip();as trip){<button class="agenda-link" (click)="navigate.emit('trips')"><span class="agenda-icon"><ion-icon name="compass-outline"></ion-icon></span><div><h3>{{trip.title}}</h3><p>{{trip.destination}}</p><small>{{(trip.start_date+'T00:00:00Z')|calendarDate:'MMM d':'UTC'}} – {{(trip.end_date+'T00:00:00Z')|calendarDate:'MMM d':'UTC'}}</small></div><ion-icon name="arrow-forward-outline"></ion-icon></button>}@else{<p class="subtle">No upcoming trips.</p><button class="text-button" (click)="navigate.emit('trips')">Plan a trip <ion-icon name="arrow-forward-outline"></ion-icon></button>}</section></div>
+<section class="home-memories"><div class="section-title"><h2>Recent memories</h2><button class="text-button" (click)="navigate.emit('memories')">View all <ion-icon name="arrow-forward-outline"></ion-icon></button></div>@if(api.media().length){<div class="recent-media">@for(media of api.media().filter(imageMedia).slice(0,3);track media.id){<button class="recent-memory" [attr.aria-label]="'Open memory from '+(media.created_at|calendarDate:'MMM d')" (click)="navigate.emit('memories')"><media-view [id]="media.id" [video]="media.mime.startsWith('video/')" label="Recent memory"></media-view><span>{{media.created_at|calendarDate:'MMM d'}}</span></button>}</div>}@else{<p class="subtle">Photos and videos you share appear here.</p>}</section>
+`})
+export class HomePage {
+  imageMedia=(media:{mime:string})=>!media.mime.startsWith('audio/');api=inject(Api);navigate=output<string>();today=new Date();greeting=this.today.getHours()<12?'GOOD MORNING':this.today.getHours()<17?'GOOD AFTERNOON':'GOOD EVENING';upcoming=computed(()=>this.api.plans().filter(p=>p.status==='planned'&&new Date(p.end_at)>=new Date()).sort((a,b)=>a.start_at.localeCompare(b.start_at)));nextTrip=computed(()=>this.api.trips().filter(t=>new Date(t.end_date+'T23:59:59')>=new Date()).sort((a,b)=>a.start_date.localeCompare(b.start_date))[0]);
+}
+

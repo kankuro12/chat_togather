@@ -1,0 +1,9 @@
+package com.together.couple;
+import android.app.NotificationManager;import android.content.Context;import com.getcapacitor.*;import com.getcapacitor.annotation.CapacitorPlugin;
+@CapacitorPlugin(name="NativeCalls") public class NativeCallsPlugin extends Plugin {
+@PluginMethod public void configure(PluginCall call){String url=call.getString("url",""),token=call.getString("token","");if(!url.startsWith("https://")||token.length()!=64){call.reject("Configure an HTTPS server before enabling native calls.");return;}getContext().getSharedPreferences("calls",Context.MODE_PRIVATE).edit().putString("url",url).putString("token",token).apply();call.resolve();}
+@PluginMethod public void takeAction(PluginCall call){var prefs=getContext().getSharedPreferences("calls",Context.MODE_PRIVATE);JSObject data=new JSObject();data.put("id",prefs.getString("id",null));data.put("action",prefs.getString("action",null));prefs.edit().remove("id").remove("action").apply();call.resolve(data);}
+@PluginMethod public void permissionStatus(PluginCall call){JSObject data=new JSObject();data.put("fullScreen",android.os.Build.VERSION.SDK_INT<34||((NotificationManager)getContext().getSystemService(Context.NOTIFICATION_SERVICE)).canUseFullScreenIntent());call.resolve(data);}
+@PluginMethod public void settings(PluginCall call){if(android.os.Build.VERSION.SDK_INT>=34)getActivity().startActivity(new android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,android.net.Uri.parse("package:"+getContext().getPackageName())));call.resolve();}
+@PluginMethod public void clear(PluginCall call){String id=call.getString("id","");((NotificationManager)getContext().getSystemService(Context.NOTIFICATION_SERVICE)).cancel(id.hashCode());call.resolve();}
+}

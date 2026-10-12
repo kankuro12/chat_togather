@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-12",
+  "framework": "Angular 20 + Ionic 8",
+  "fonts": [
+    "Georgia",
+    "Segoe UI"
+  ],
+  "palette": "Bright coral/blush/teal per user request; colors centralized in tokens.css",
+  "motion": "No added dependency",
+  "spacing": "4-point semantic tokens",
+  "sources": [
+    "client/package.json",
+    "client/src/styles.scss",
+    "client/src/app/app.ts"
+  ]
+}
