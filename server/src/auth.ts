@@ -13,7 +13,7 @@ async function matches(password:string,stored:string){const [salt,key]=stored.sp
 export function authRoutes(c:Context){
   const router=Router();
   const limit=rateLimit({windowMs:15*60*1000,limit:40,standardHeaders:'draft-8',legacyHeaders:false,message:{error:'Too many attempts. Try again in 15 minutes.'}});
-  function session(userId:string){const token=randomBytes(32).toString('hex');c.run('INSERT INTO sessions VALUES(?,?,?)',hash(token),userId,Date.now()+7*86400000);return token;}
+  async function session(userId:string){const token=randomBytes(32).toString('hex');await c.storage.sessions.create(hash(token),userId,Date.now()+7*86400000);return token;}
   router.post('/register',limit,async(req,res)=>{
     const input=register.parse(req.body);
     if(c.one('SELECT id FROM users WHERE email=?',input.email))throw new HttpError(409,'Email already registered.');
@@ -23,13 +23,13 @@ export function authRoutes(c:Context){
       if(c.one('SELECT id FROM users WHERE email=?',input.email))throw new HttpError(409,'Email already registered.');
       c.run('INSERT INTO users VALUES(?,?,?,?,?)',user.id,user.name,user.email,password,now());
     });
-    res.status(201).json({user,token:session(user.id),pair:null});
+    res.status(201).json({user,token:await session(user.id),pair:null});
   });
   router.post('/login',limit,async(req,res)=>{
     const input=z.object({email:z.email().transform(s=>s.toLowerCase()),password:z.string().max(128)}).parse(req.body);
     const user=c.one('SELECT * FROM users WHERE email=?',input.email);
     if(!user||!await matches(input.password,user.password))throw new HttpError(401,'Email or password incorrect.');
-    res.json({token:session(user.id),user:{id:user.id,name:user.name,email:user.email}});
+    res.json({token:await session(user.id),user:{id:user.id,name:user.name,email:user.email}});
   });
   router.get('/me',c.authenticated,(req,res)=>{
     const {id:userId,name,email,coupleId}=req.identity;
@@ -40,8 +40,8 @@ export function authRoutes(c:Context){
     const input=z.object({name:z.string().trim().min(1).max(60)}).safeParse(req.body);if(!input.success)throw new HttpError(400,'Enter your name (up to 60 characters).');
     c.transaction(()=>{c.run('UPDATE users SET name=? WHERE id=?',input.data.name,req.identity.id);c.run('UPDATE phone_profiles SET complete=1 WHERE user_id=?',req.identity.id);});res.json({ok:true});
   });
-  router.post('/logout',c.authenticated,(req,res)=>{
-    c.run('DELETE FROM push_tokens WHERE session_hash=?',req.identity.tokenHash);c.run('DELETE FROM sessions WHERE token_hash=?',req.identity.tokenHash);
+  router.post('/logout',c.authenticated,async(req,res)=>{
+    await c.storage.sessions.delete(req.identity.tokenHash);c.run('DELETE FROM push_tokens WHERE session_hash=?',req.identity.tokenHash);
     for(const socket of c.io.sockets.sockets.values()) if(socket.data.tokenHash===req.identity.tokenHash)socket.disconnect(true);
     res.json({ok:true});
   });

@@ -1,4 +1,3 @@
-import {jobQueue} from './jobs.js';
 import {Router} from 'express';
 import {rateLimit} from 'express-rate-limit';
 import {z} from 'zod';
@@ -8,13 +7,18 @@ export type CommunicationOptions={firebase?:Record<string,string>;vapidKey?:stri
 export function communication(c:Context,options:CommunicationOptions={}){
   c.db.exec('CREATE TABLE IF NOT EXISTS push_tokens(token TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),session_hash TEXT NOT NULL,created_at INTEGER NOT NULL)');
   c.db.exec("CREATE TABLE IF NOT EXISTS incoming_calls(id TEXT PRIMARY KEY,couple_id TEXT NOT NULL,caller_id TEXT NOT NULL,callee_id TEXT NOT NULL,kind TEXT NOT NULL,state TEXT NOT NULL,expires_at INTEGER NOT NULL); UPDATE incoming_calls SET state='ended' WHERE state!='ended';");
-  const queue=jobQueue(c.db);
+  const queue=c.storage.queue;
   const calls=new Map<string,{id:string;kind:'audio'|'video';caller:Socket;callee?:Socket;timer:ReturnType<typeof setTimeout>}>();
   const locations=new Map<string,{user_id:string;coupleId:string;socketId:string;expires_at:number;latitude?:number;longitude?:number;accuracy?:number;updated_at?:number;timer:ReturnType<typeof setTimeout>}>();
-  const notify=(couple:string,user:string,kind:string,message?:string)=>{
+  async function liveTokens(sql:string,...params:import('node:sqlite').SQLInputValue[]){
+    const rows=c.all(sql,...params),live=[];
+    for(const row of rows){const session=await c.storage.sessions.get(row.session_hash);if(session?.userId===row.user_id)live.push(row);}
+    return live;
+  }
+  const notify=async(couple:string,user:string,kind:string,message?:string)=>{
     const readingSessions=new Set([...c.io.sockets.sockets.values()].filter(socket=>socket.data.user?.coupleId===couple&&socket.data.chatReading&&Date.now()-socket.data.chatViewedAt<45000).map(socket=>socket.data.tokenHash));
-    const tokens=c.all('SELECT p.token,p.session_hash FROM push_tokens p JOIN sessions s ON s.token_hash=p.session_hash JOIN memberships m ON m.user_id=p.user_id WHERE m.couple_id=? AND p.user_id!=? AND s.expires_at>?',couple,user,Date.now()).filter(row=>kind!=='message'||!readingSessions.has(row.session_hash)).map(row=>row.token as string);
-    const event=message||id();for(const token of tokens)queue.enqueue('push',{token,couple,kind,message,event},'push:'+kind+':'+event+':'+hash(token));
+    const tokens=(await liveTokens('SELECT p.token,p.session_hash,p.user_id FROM push_tokens p JOIN memberships m ON m.user_id=p.user_id WHERE m.couple_id=? AND p.user_id!=?',couple,user)).filter(row=>kind!=='message'||!readingSessions.has(row.session_hash)).map(row=>row.token as string);
+    const event=message||id();for(const token of tokens)await queue.enqueue('push',{token,couple,kind,message,event},'push:'+kind+':'+event+':'+hash(token));
   };
   const router=Router();router.use(c.authenticated,c.paired);
   router.get('/config',(_req,res)=>res.json({firebase:options.firebase||null,vapidKey:options.vapidKey||'',notifications:!!options.sendPush,iceServers:options.iceServers||[{urls:'stun:stun.l.google.com:19302'}]}));
@@ -24,28 +28,30 @@ export function communication(c:Context,options:CommunicationOptions={}){
   const stopLocation=(user:string)=>{const share=locations.get(user);if(!share)return;clearTimeout(share.timer);locations.delete(user);c.io.to(`couple:${share.coupleId}`).emit('location:stopped',{user_id:user});};
   router.get('/locations',(req,res)=>res.json([...locations.values()].filter(value=>value.coupleId===req.identity.coupleId&&value.latitude!==undefined&&value.expires_at>Date.now()).map(({timer,socketId,coupleId,...value})=>value)));
   const notifications=Router();notifications.use(c.authenticated,c.paired,rateLimit({windowMs:60000,limit:20,standardHeaders:'draft-8',legacyHeaders:false,message:{error:'Please wait before changing notifications again.'}}));
-  notifications.post('/token',(req,res)=>{const {token}=z.object({token:z.string().min(20).max(4096)}).parse(req.body);c.run('DELETE FROM push_tokens WHERE session_hash NOT IN (SELECT token_hash FROM sessions WHERE expires_at>?)',Date.now());if(Number(c.one('SELECT count(*) AS n FROM push_tokens WHERE user_id=? AND token!=?',req.identity.id,token)?.n)>=10)throw new HttpError(429,'Too many devices registered. Disable notifications on another device.');c.run('INSERT INTO push_tokens VALUES(?,?,?,?) ON CONFLICT(token) DO UPDATE SET user_id=excluded.user_id,session_hash=excluded.session_hash,created_at=excluded.created_at',token,req.identity.id,req.identity.tokenHash,Date.now());res.json({ok:true});});
+  notifications.post('/token',async(req,res)=>{const {token}=z.object({token:z.string().min(20).max(4096)}).parse(req.body);for(const row of c.all('SELECT token,session_hash FROM push_tokens WHERE user_id=?',req.identity.id)){if(!(await c.storage.sessions.get(row.session_hash)))c.run('DELETE FROM push_tokens WHERE token=?',row.token);}if(Number(c.one('SELECT count(*) AS n FROM push_tokens WHERE user_id=? AND token!=?',req.identity.id,token)?.n)>=10)throw new HttpError(429,'Too many devices registered. Disable notifications on another device.');c.run('INSERT INTO push_tokens VALUES(?,?,?,?) ON CONFLICT(token) DO UPDATE SET user_id=excluded.user_id,session_hash=excluded.session_hash,created_at=excluded.created_at',token,req.identity.id,req.identity.tokenHash,Date.now());res.json({ok:true});});
   notifications.delete('/token',(req,res)=>{c.run('DELETE FROM push_tokens WHERE session_hash=?',req.identity.tokenHash);res.json({ok:true});});
-  const end=(couple:string,reason:string)=>{const call=calls.get(couple);if(!call)return;clearTimeout(call.timer);calls.delete(couple);c.run("UPDATE incoming_calls SET state='ended' WHERE id=?",call.id);notify(couple,call.caller.data.user.id,'call_cancel',call.id);c.io.to(`couple:${couple}`).emit('call:ended',{id:call.id,reason});};
+  const backgroundNotify=(couple:string,user:string,kind:string,event:string)=>{void notify(couple,user,kind,event).catch(()=>console.error('Could not queue call notification.'));};
+  const end=(couple:string,reason:string)=>{const call=calls.get(couple);if(!call)return;clearTimeout(call.timer);calls.delete(couple);c.run("UPDATE incoming_calls SET state='ended' WHERE id=?",call.id);backgroundNotify(couple,call.caller.data.user.id,'call_cancel',call.id);c.io.to(`couple:${couple}`).emit('call:ended',{id:call.id,reason});};
   function bind(socket:Socket){
     const user=socket.data.user,room=`couple:${user.coupleId}`;let count=0,window=Date.now(),lastLocation=0;
-    const on=(name:string,handler:(data:any)=>any)=>socket.on(name,(data:any,ack?:any)=>{
-      try{c.identity(socket.handshake.auth.token);if(Date.now()-window>60000){window=Date.now();count=0;}if(++count>180)throw new HttpError(429,'Please wait a moment.');const result=handler(data);if(typeof ack==='function')ack({ok:true,...result});}
+    const on=(name:string,handler:(data:any)=>any)=>socket.on(name,async(data:any,ack?:any)=>{
+      try{await c.identity(socket.handshake.auth.token);if(Date.now()-window>60000){window=Date.now();count=0;}if(++count>180)throw new HttpError(429,'Please wait a moment.');const result=await handler(data);if(typeof ack==='function')ack({ok:true,...result});}
       catch(error){if(typeof ack==='function')ack({ok:false,error:error instanceof HttpError?error.message:'Could not complete this action.'});}
     });
     const current=(data:any)=>{const call=calls.get(user.coupleId);if(!call||call.id!==data?.id)throw new HttpError(409,'Call ended.');return call;};
-    on('call:start',data=>{
+    on('call:start',async data=>{
       const {kind}=z.object({kind:z.enum(['audio','video'])}).parse(data);if(calls.has(user.coupleId))throw new HttpError(409,'A call is already in progress.');
-      const partners=[...c.io.sockets.sockets.values()].filter(s=>s.data.user?.coupleId===user.coupleId&&s.data.user.id!==user.id&&s.connected).filter(s=>{try{c.identity(s.handshake.auth.token);return true;}catch{return false;}});
+      const partners:Socket[]=[];for(const other of c.io.sockets.sockets.values()){if(other.data.user?.coupleId===user.coupleId&&other.data.user.id!==user.id&&other.connected){try{await c.identity(other.handshake.auth.token);partners.push(other);}catch{}}}
       const recipient=c.one('SELECT user_id FROM memberships WHERE couple_id=? AND user_id!=?',user.coupleId,user.id);if(!recipient)throw new HttpError(409,'Pair before calling.');
-      if(!partners.length&&!c.one('SELECT 1 FROM push_tokens p JOIN sessions s ON s.token_hash=p.session_hash WHERE p.user_id=? AND s.expires_at>?',recipient.user_id,Date.now()))throw new HttpError(409,'Your partner is offline and has not enabled call notifications.');
+      if(!partners.length&&!(await liveTokens('SELECT token,session_hash,user_id FROM push_tokens WHERE user_id=?',recipient.user_id)).length)throw new HttpError(409,'Your partner is offline and has not enabled call notifications.');
+      if(calls.has(user.coupleId))throw new HttpError(409,'A call is already in progress.');
       const call={id:id(),kind,caller:socket,timer:setTimeout(()=>end(user.coupleId,'No answer'),45000)};call.timer.unref();calls.set(user.coupleId,call);c.run('INSERT INTO incoming_calls VALUES(?,?,?,?,?,?,?)',call.id,user.coupleId,user.id,recipient.user_id,kind,'ringing',Date.now()+45000);
-      for(const partner of partners)partner.emit('call:incoming',{id:call.id,kind,name:user.name});void notify(user.coupleId,user.id,'call',call.id);return {id:call.id};
+      for(const partner of partners)partner.emit('call:incoming',{id:call.id,kind,name:user.name});await notify(user.coupleId,user.id,'call',call.id);return {id:call.id};
     });
-    on('call:accept',data=>{const call=current(data);if(call.caller.data.user.id===user.id||call.callee)throw new HttpError(409,'Call unavailable.');call.callee=socket;clearTimeout(call.timer);c.run("UPDATE incoming_calls SET state='accepted' WHERE id=?",call.id);notify(user.coupleId,call.caller.data.user.id,'call_cancel',call.id);call.caller.emit('call:accepted',{id:call.id});socket.to(room).emit('call:claimed',{id:call.id});return {};});
-    on('call:signal',data=>{const call=current(data);if(!call.callee||(socket!==call.caller&&socket!==call.callee))throw new HttpError(403,'Call unavailable.');
+    on('call:accept',async data=>{const call=current(data);if(call.caller.data.user.id===user.id||call.callee)throw new HttpError(409,'Call unavailable.');call.callee=socket;clearTimeout(call.timer);c.run("UPDATE incoming_calls SET state='accepted' WHERE id=?",call.id);await notify(user.coupleId,call.caller.data.user.id,'call_cancel',call.id);call.caller.emit('call:accepted',{id:call.id});socket.to(room).emit('call:claimed',{id:call.id});return {};});
+    on('call:signal',async data=>{const call=current(data);if(!call.callee||(socket!==call.caller&&socket!==call.callee))throw new HttpError(403,'Call unavailable.');
       const input=z.object({id:z.uuid(),description:z.object({type:z.enum(['offer','answer']),sdp:z.string().max(32000)}).optional(),candidate:z.object({candidate:z.string().max(4096),sdpMid:z.string().nullable().optional(),sdpMLineIndex:z.number().int().min(0).nullable().optional(),usernameFragment:z.string().max(256).nullable().optional()}).optional()}).refine(v=>!!v.description!==!!v.candidate).parse(data);
-      const other=socket===call.caller?call.callee:call.caller;try{c.identity(other.handshake.auth.token);}catch{end(user.coupleId,'Call ended');throw new HttpError(409,'Call ended.');}other.emit('call:signal',input);return {};
+      const other=socket===call.caller?call.callee:call.caller;try{await c.identity(other.handshake.auth.token);}catch{end(user.coupleId,'Call ended');throw new HttpError(409,'Call ended.');}other.emit('call:signal',input);return {};
     });
     on('call:end',data=>{const call=current(data);if(socket!==call.caller&&socket!==call.callee&&(!!call.callee||call.caller.data.user.id===user.id))throw new HttpError(403,'Call unavailable.');end(user.coupleId,call.callee?'Call ended':'Call declined');return {};});
     on('location:start',data=>{const {minutes}=z.object({minutes:z.union([z.literal(15),z.literal(60)])}).parse(data);stopLocation(user.id);lastLocation=0;const timer=setTimeout(()=>stopLocation(user.id),minutes*60000);timer.unref();const expires_at=Math.min(Date.now()+minutes*60000,user.expiresAt);locations.set(user.id,{user_id:user.id,coupleId:user.coupleId,socketId:socket.id,expires_at,timer});return {expires_at};});

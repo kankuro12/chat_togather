@@ -57,11 +57,23 @@ test('test phone OTP needs a challenge, rejects wrong codes, expires, and is sin
   }finally{s.io.close();s.db.close();}
 });
 
-test('production ignores phone test mode',async()=>{
+test('production enables test OTP only with explicit phone test mode',async()=>{
   const previous=process.env.NODE_ENV;process.env.NODE_ENV='production';
-  const s=createApp({databasePath:':memory:',uploadDir:'unused',origins:[],auth:{phoneTestMode:true}});
-  try{assert.equal((await request(s.server).post('/api/auth/phone/send').send({phone:'+9779800000099'})).status,503);}
-  finally{s.io.close();s.db.close();if(previous===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=previous;}
+  try{
+    for(const phoneTestMode of [undefined,false,true]){
+      const s=createApp({databasePath:':memory:',uploadDir:'unused',origins:[],auth:{phoneTestMode,fetch:async()=>{throw new Error('Test mode must not call SMS provider');}}});
+      try{
+        const api=request(s.server),sent=await api.post('/api/auth/phone/send').send({phone:'+9779800000099'});
+        assert.equal(sent.status,phoneTestMode===true?200:503);
+        if(phoneTestMode===true){
+          assert.equal((await api.post('/api/auth/phone/verify').send({challenge:sent.body.challenge,code:'000000'})).status,400);
+          const verified=await api.post('/api/auth/phone/verify').send({challenge:sent.body.challenge,code:'123456'});assert.equal(verified.status,200);
+          assert.equal((await api.get('/api/auth/me').set('Authorization','Bearer '+verified.body.token)).status,200);
+          assert.equal((await api.post('/api/auth/phone/verify').send({challenge:sent.body.challenge,code:'123456'})).status,400);
+        }
+      }finally{await new Promise<void>(resolve=>s.io.close(()=>resolve()));s.db.close();}
+    }
+  }finally{if(previous===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=previous;}
 });
 
 test('unconfigured providers fail safely without creating accounts',async()=>{

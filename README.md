@@ -19,7 +19,7 @@ No demo login or seeded private content. Browser tests create their own local ac
 
 Copy `server/.env.example` to `server/.env`. Email sign-in works without external credentials. Phone sign-in uses Twilio Verify: configure `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_VERIFY_SERVICE_SID`; select a six-digit code in the Verify service. Enable SMS destinations in Twilio and verify recipients when using a trial account.
 
-For local phone testing, set `PHONE_TEST_MODE=true` in `server/.env`; request a code, then enter `123456`. No SMS or Twilio credentials needed. Challenges still expire, allow five attempts, and are single-use. Test mode is ignored when `NODE_ENV=production`. Local development currently enables this flag.
+For phone testing, set `PHONE_TEST_MODE=true` in `server/.env` and restart the API; request a code, then enter `123456`. Works with `NODE_ENV=production`; no SMS or Twilio credentials needed. Challenges still expire, allow five attempts, and are single-use. While enabled, anyone can sign in as any phone number. Set `PHONE_TEST_MODE=false` after testing. Local development currently enables this flag.
 
 Set `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` and `FACEBOOK_CLIENT_ID`/`FACEBOOK_CLIENT_SECRET` from your provider applications. Register exact callbacks `${PUBLIC_URL}/api/auth/oauth/google/callback` and `${PUBLIC_URL}/api/auth/oauth/facebook/callback`. Set `PUBLIC_URL` to the API origin and `APP_URL` to the web origin, add the web origin to `ALLOWED_ORIGINS`, and use HTTPS in production. Facebook apps need live mode and any required review for public users. `FACEBOOK_GRAPH_VERSION` is configurable. Use the same hostname (localhost or 127.0.0.1) for both origins locally so the callback cookie stays on the same site.
 
@@ -49,7 +49,22 @@ npm start
 
 API serves compiled frontend at http://localhost:3001. Public deployment requires HTTPS; reverse-proxy `/api` and `/socket.io` including WebSocket upgrades. Set `HOST=0.0.0.0` only when exposing service through your deployment network. Protect `server/data` and backups.
 
+API trusts exactly one reverse proxy for client IPs. Keep API reachable only through that proxy in production; the proxy must overwrite forwarded IP, host, and protocol headers. Adjust `trust proxy` in `server/src/app.ts` if deployment uses a different proxy topology.
+
 Optional `server/.env` (see `server/.env.example`): port, host, database file, allowed origins. Origins must be exact comma-separated values. Keep native origins for packaged apps.
+
+Sessions and background jobs share one storage toggle in `server/.env`:
+
+```dotenv
+STORAGE_DRIVER=db
+# Use STORAGE_DRIVER=redis to store sessions and jobs in Redis.
+REDIS_URL=redis://127.0.0.1:6379
+REDIS_PREFIX=together
+```
+
+`db` (default) uses the existing SQLite database; `redis` uses Redis 6.2+ and BullMQ. Application records and push device registrations still use SQLite. Keep the same settings and `DB_PATH` for API, worker (`npm run worker -w server`), and job status (`npm run jobs -w server`). Restart API and worker after changing settings. Each backend keeps its own sessions and pending jobs; switching requires signing in again and does not move jobs. Drain pending jobs before switching. Enable Redis persistence and use a `noeviction` policy to retain sessions and jobs across Redis restarts. Use a distinct `REDIS_PREFIX` for each deployment.
+
+Run Redis integration tests with `TEST_REDIS_URL` set to a test Redis instance; tests use isolated key prefixes and remove only their own keys.
 
 ## Mobile
 

@@ -17,16 +17,20 @@ import multer from 'multer';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import { resolve } from 'node:path';
 import { externalAuthRoutes, AuthOptions } from './external-auth.js';
-export function createApp(options: {databasePath:string;uploadDir:string;origins:string[];webDir?:string;auth?:AuthOptions;communication?:CommunicationOptions}) {
-  const app=express(); app.disable('x-powered-by'); app.use(helmet({contentSecurityPolicy:{directives:{imgSrc:["'self'",'data:','blob:'],connectSrc:["'self'",'https://firebaseinstallations.googleapis.com','https://fcmregistrations.googleapis.com'],mediaSrc:["'self'",'blob:'],upgradeInsecureRequests:null}}}),cors({origin:options.origins,credentials:true}),express.json({limit:'64kb'}));
+import {createStorage,validateStorage,type StorageOptions} from './storage.js';
+export function createApp(options: {databasePath:string;uploadDir:string;origins:string[];webDir?:string;auth?:AuthOptions;communication?:CommunicationOptions;storage?:StorageOptions}) {
+  validateStorage(options.storage||{});
+  const app=express();
+  app.set('trust proxy',1);
+  app.disable('x-powered-by'); app.use(helmet({contentSecurityPolicy:{directives:{imgSrc:["'self'",'data:','blob:'],connectSrc:["'self'",'https://firebaseinstallations.googleapis.com','https://fcmregistrations.googleapis.com'],mediaSrc:["'self'",'blob:'],upgradeInsecureRequests:null}}}),cors({origin:options.origins,credentials:true}),express.json({limit:'64kb'}));
   const server=createServer(app); const io=new Server(server,{cors:{origin:options.origins},maxHttpBufferSize:64*1024});
-  const db=openDatabase(options.databasePath); const c=context(db,io,options.uploadDir);const comm=communication(c,options.communication);
+  const db=openDatabase(options.databasePath),storage=createStorage(db,options.storage); const c=context(db,io,options.uploadDir,storage);const comm=communication(c,options.communication);
   app.use('/api',(_req,res,next)=>{res.set('Cache-Control','no-store');next();});
   app.get('/api/health',(_req,res)=>res.json({ok:true}));
   app.use('/api/auth',externalAuthRoutes(c,options.auth));
   app.use('/api/auth',authRoutes(c)); app.use('/api/pair',pairRoutes(c));
-  app.use('/api',rateLimit({windowMs:60000,limit:300,standardHeaders:'draft-8',legacyHeaders:false,keyGenerator:req=>{
-    try{return `account:${c.identity(req.headers.authorization?.replace(/^Bearer /,'')).id}`;}
+  app.use('/api',rateLimit({windowMs:60000,limit:300,standardHeaders:'draft-8',legacyHeaders:false,keyGenerator:async req=>{
+    try{return `account:${(await c.identity(req.headers.authorization?.replace(/^Bearer /,''))).id}`;}
     catch{return ipKeyGenerator(req.ip||'unknown');}
   },message:{error:'Too many requests. Try again shortly.'}}));
   app.use('/api/communication',comm.router);app.use('/api/notifications',comm.notifications);
@@ -42,6 +46,6 @@ export function createApp(options: {databasePath:string;uploadDir:string;origins
     if(error instanceof SyntaxError){res.status(400).json({error:'Invalid JSON.'});return;}
     console.error('Request failed:',error.message);res.status(500).json({error:'Something went wrong. Please try again.'});
   });
-  return {app,server,io,db};
+  return {app,server,io,db,storage};
 }
 

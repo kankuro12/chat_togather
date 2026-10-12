@@ -11,12 +11,14 @@
     "jobs": "tsx src/job-status.ts"
   },
   "dependencies": {
+    "bullmq": "^6.3.13",
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "express-rate-limit": "^8.1.0",
     "file-type": "^21.0.0",
     "firebase-admin": "^14.5.0",
     "helmet": "^8.1.0",
+    "ioredis": "^6.0.0",
     "multer": "^2.0.2",
     "socket.io": "^4.8.1",
     "zod": "^4.1.0"
