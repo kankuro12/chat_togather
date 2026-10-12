@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import request from 'supertest';
 import {io,Socket} from 'socket.io-client';
 import {createApp} from '../src/app.js';
-test('unread persists, reads cannot move backwards or cross couples; reading sessions suppress only message push',async()=>{
+test('unread persists, reads cannot move backwards or cross couples; every message event pushes',async()=>{
 const sent:any[]=[];const app=await createApp({databasePath:':memory:',uploadDir:'unused',origins:[],communication:{sendPush:async(tokens,kind)=>{sent.push({tokens,kind});return [];}}});let socket:Socket|undefined;
 try{
 await new Promise<void>(r=>app.server.listen(0,'127.0.0.1',r));const api=request(app.server),users:any[]=[];
@@ -36,10 +36,10 @@ assert.deepEqual(sent.at(-1),{tokens:['other-device-token-1234567890'],kind:'mes
 socket.emit('chat:view',false);await new Promise(r=>setTimeout(r,30));
 await api.post('/api/messages').set(auth(1)).send({text:'Away',client_id:'away'});
 while(await jobQueue(app.db).runOne({push:pushHandler(app.db,async(tokens,kind)=>{sent.push({tokens,kind});return [];})})){}
-assert.equal(sent.length,3);assert.equal(sent[1].tokens.length,1);assert.equal(sent[1].kind,'message');
+assert.equal(sent.length,5);assert.equal(sent[3].kind,'message');
 socket.disconnect();await new Promise(r=>setTimeout(r,30));
 await api.post('/api/messages').set(auth(1)).send({text:'Closed',client_id:'closed'});
 while(await jobQueue(app.db).runOne({push:pushHandler(app.db,async(tokens,kind)=>{sent.push({tokens,kind});return [];})})){}
-assert.equal(sent.length,5);
+assert.equal(sent.length,7);
 }finally{socket?.disconnect();await new Promise<void>(r=>app.io.close(()=>r()));await app.db.close();}
 });

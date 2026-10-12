@@ -21,7 +21,7 @@ async function pair(){
   return {app,api,alice,bob,auth,uploadDir};
 }
 
-test('choice push uses decision event, survives chat reading, and skips answered or invalid jobs',async()=>{
+test('choice push uses decision event and preserves answered events until delivery',async()=>{
   const {app,api,alice,bob,auth,uploadDir}=await pair();
   try{
     const upload=await api.post('/api/media?purpose=choice').set(auth(alice)).attach('file',png,{filename:'choice.png',contentType:'image/png'});assert.equal(upload.status,201);
@@ -36,18 +36,18 @@ test('choice push uses decision event, survives chat reading, and skips answered
     await api.post('/api/decisions/'+decision.body.id+'/vote').set(auth(bob)).send({option_id:decision.body.options[0].id});
     const voteJobs=await app.db.prepare("SELECT payload FROM jobs WHERE type='push' AND state='queued'").all() as any[];assert.ok(voteJobs.map(row=>JSON.parse(row.payload)).some(value=>value.kind==='message'),'vote notification must remain a message job');assert.equal(await run.runOne({push:handler}),true);assert.equal(sent.at(-1)?.kind,'message');
     await run.enqueue('push',{token:'choice-device-token-1234567890',couple:decision.body.couple_id,kind:'choice',message:decision.body.id,event:decision.body.id},'answered-choice');
-    assert.equal(await run.runOne({push:handler}),true);assert.equal(sent.length,2);
+    assert.equal(await run.runOne({push:handler}),true);assert.equal(sent.length,3);
     await run.enqueue('push',{token:'choice-device-token-1234567890',couple:randomUUID(),kind:'choice',message:decision.body.id,event:decision.body.id},'wrong-couple');
-    assert.equal(await run.runOne({push:handler}),true);assert.equal(sent.length,2);
+    assert.equal(await run.runOne({push:handler}),true);assert.equal(sent.length,3);
     const rated=await api.post('/api/decisions').set(auth(alice)).send({title:'Rate',mode:'rate',options:[{media_id:upload.body.id},{media_id:upload.body.id}]});
     for(const row of await app.db.prepare("SELECT id,payload FROM jobs WHERE type='push' AND state='queued'").all() as any[]){if(JSON.parse(row.payload).kind==='choice'&&JSON.parse(row.payload).event===rated.body.id)await app.db.prepare('DELETE FROM jobs WHERE id=?').run(row.id);}
     await api.post('/api/decisions/'+rated.body.id+'/vote').set(auth(bob)).send({option_id:rated.body.options[0].id,rating:4});assert.equal(await run.runOne({push:handler}),true);
     await api.post('/api/decisions/'+rated.body.id+'/vote').set(auth(bob)).send({option_id:rated.body.options[1].id,rating:5});assert.equal(await run.runOne({push:handler}),true);
     await run.enqueue('push',{token:'choice-device-token-1234567890',couple:rated.body.couple_id,kind:'choice',message:rated.body.id,event:rated.body.id},'rated-choice');
-    assert.equal(await run.runOne({push:handler}),true);assert.equal(sent.length,4);
+    assert.equal(await run.runOne({push:handler}),true);assert.equal(sent.length,6);
     await api.post('/api/auth/logout').set(auth(bob)).send({});
     await run.enqueue('push',{token:'choice-device-token-1234567890',couple:decision.body.couple_id,kind:'choice',message:decision.body.id,event:decision.body.id},'invalid-session');
-    assert.equal(await run.runOne({push:handler}),true);assert.equal(sent.length,4);
+    assert.equal(await run.runOne({push:handler}),true);assert.equal(sent.length,6);
   }finally{await new Promise<void>(resolve=>app.io.close(()=>resolve()));await app.storage.close();await app.db.close();rmSync(uploadDir,{recursive:true,force:true});}
 });
 

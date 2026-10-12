@@ -14,8 +14,7 @@ export function communication(c:Context,options:CommunicationOptions={}){
     return live;
   }
   const notify=async(couple:string,user:string,kind:string,message?:string)=>{
-    const readingSessions=new Set([...c.io.sockets.sockets.values()].filter(socket=>socket.data.user?.coupleId===couple&&socket.data.chatReading&&Date.now()-socket.data.chatViewedAt<45000).map(socket=>socket.data.tokenHash));
-    const tokens=(await liveTokens('SELECT p.token,p.session_hash,p.user_id FROM push_tokens p JOIN memberships m ON m.user_id=p.user_id WHERE m.couple_id=? AND p.user_id!=?',couple,user)).filter(row=>kind!=='message'||!readingSessions.has(row.session_hash)).map(row=>row.token as string);
+    const tokens=(await liveTokens('SELECT p.token,p.session_hash,p.user_id FROM push_tokens p JOIN memberships m ON m.user_id=p.user_id WHERE m.couple_id=? AND p.user_id!=?',couple,user)).map(row=>row.token as string);
     const event=message||id();for(const token of tokens)await queue.enqueue('push',{token,couple,kind,message,event},'push:'+kind+':'+event+':'+hash(token));
   };
   const router=Router();router.use(c.authenticated,c.paired);

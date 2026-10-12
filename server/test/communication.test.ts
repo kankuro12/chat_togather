@@ -36,11 +36,11 @@ test('calls and live locations stay inside pair; logout removes notification reg
     const before=deliveries.length,read=(await api.post('/api/messages').set(headers(0)).send({text:'Read before delivery',client_id:'read-later'})).body;
     await api.post('/api/messages/read').set(headers(1)).send({message_id:read.id});
     while(await jobQueue(s.db).runOne({push:pushHandler(s.db,async(tokens,kind)=>{deliveries.push({tokens,kind});return [];})})){}
-    assert.equal(deliveries.length,before);
+assert.equal(deliveries.length,before+1);
     await api.post('/api/messages').set(headers(0)).send({text:'Revoked before delivery',client_id:'revoked'});
     await api.delete('/api/notifications/token').set(headers(1));
     while(await jobQueue(s.db).runOne({push:pushHandler(s.db,async(tokens,kind)=>{deliveries.push({tokens,kind});return [];})})){}
-    assert.equal(deliveries.length,before);
+    assert.equal(deliveries.length,before+1);
     assert.equal((await s.db.prepare('SELECT count(*) AS n FROM push_tokens').get())?.n,1);
     await api.post('/api/auth/logout').set(headers(0)).send({});assert.equal((await s.db.prepare('SELECT count(*) AS n FROM push_tokens').get())?.n,0);
   }finally{sockets.forEach(socket=>socket.disconnect());await new Promise<void>(resolve=>s.io.close(()=>resolve()));await s.db.close();}
