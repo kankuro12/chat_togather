@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomBytes,randomUUID} from 'node:crypto';
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 
 const web=process.env.LIVE_WEB_URL||'https://togather.dairyco.com.np';
 const apiURL=process.env.LIVE_API_URL||'https://api.togather.dairyco.com.np';
@@ -68,6 +69,10 @@ try{
     const call=await emit('call:start',{kind});const notification=await waitForNotification(call.id);
     assert.ok(notification.actions.includes('answer')&&notification.actions.includes('decline'));
     check(kind+'-call',{event:call.id,title:notification.title,actions:notification.actions});
+    if(kind==='audio'&&process.env.LIVE_SCREENSHOT==='1'){
+      await mkdir('artifacts',{recursive:true});execFileSync('scrot',['--overwrite','artifacts/live-fcm-notifications.png']);
+      report.screenshot='artifacts/live-fcm-notifications.png';
+    }
     await json(await api.post('/api/communication/calls/'+call.id+'/decline',{headers:auth(recipient),data:{}}));
     const until=Date.now()+15000;while((await notifications()).some(n=>n.tag===call.id)&&Date.now()<until)await new Promise(r=>setTimeout(r,500));
     assert.ok(!(await notifications()).some(n=>n.tag===call.id),'Canceled call notification remains');

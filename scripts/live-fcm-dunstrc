@@ -1,0 +1,12 @@
+[global]
+    stack_duplicates = false
+    notification_limit = 0
+    origin = top-right
+    width = 380
+    font = Sans 11
+[urgency_low]
+    timeout = 0
+[urgency_normal]
+    timeout = 0
+[urgency_critical]
+    timeout = 0
