@@ -44,3 +44,29 @@
   --radius-pill: 999px;
   --rule-fine: 1px;
 }
+
+/* Dark mode follows the device setting; same hues, lightness inverted. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --color-warm-paper: oklch(32% 0.06 65);
+    --color-highlight-paper: oklch(30% 0.05 175);
+    --color-highlight: oklch(82% 0.09 175);
+    --color-paper: oklch(23% 0.016 325);
+    --color-paper-2: oklch(18% 0.014 325);
+    --color-paper-3: oklch(29% 0.03 15);
+    --color-ink: oklch(94% 0.01 60);
+    --color-ink-2: oklch(86% 0.014 60);
+    --color-muted: oklch(73% 0.02 325);
+    --color-rule: oklch(34% 0.02 325);
+    --color-accent: oklch(60% 0.21 15);
+    --color-accent-hover: oklch(66% 0.19 15);
+    --color-accent-ink: oklch(99% 0.004 60);
+    --color-focus: oklch(74% 0.14 265);
+    --color-success: oklch(80% 0.11 160);
+    --color-success-paper: oklch(30% 0.05 160);
+    --color-error: oklch(77% 0.13 30);
+    --color-error-paper: oklch(29% 0.06 30);
+    --color-backdrop: oklch(5% 0.01 325 / 0.65);
+  }
+}

@@ -10,8 +10,8 @@ test('chat shows all six choice thumbnails and opens the clicked image on mobile
   try{
     await page.goto('/#chat');const message=page.locator('.message').filter({hasText:'New choice: All six images'});
     await expect(message.locator('.chat-choice-image')).toHaveCount(6);await expect(message.locator('.chat-choice-image img')).toHaveCount(6);
-    const choiceControl=message.getByRole('button',{name:'View choice',exact:true});
-    await expect(choiceControl.locator('ion-icon')).toHaveCount(1);await expect(choiceControl).toHaveText('');
+    // The thumbnails open the choice themselves, so there is no separate "View choice" button.
+    await expect(message.getByRole('button',{name:'View choice',exact:true})).toHaveCount(0);
     await page.getByRole('button',{name:'More message options'}).click();
     for(const name of ['Voice message','Video message','Live location']){
       const control=page.getByRole('button',{name,exact:true});await expect(control).toHaveText('');await expect(control.locator('ion-icon')).toHaveCount(1);

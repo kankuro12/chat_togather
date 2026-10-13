@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {isChoiceNotification,isCallNotification,notificationDetails,callNotificationDetails} from '../src/app/notification-data.js';
+import {isChoiceNotification,isCallNotification,notificationDetails,notificationTitle,notificationSummary,callNotificationDetails} from '../src/app/notification-data.js';
 
 test('reading Chat preserves direct, FCM-wrapped and Android-tagged choice notifications',()=>{
   const delivered=[
@@ -28,4 +28,13 @@ test('call alerts preserve actions and expire; chat clearing preserves wrapped c
   assert.equal(callNotificationDetails({...data,expires_at:'invalid'}),undefined);
   assert.equal(isCallNotification({data}),true);
   assert.equal(isCallNotification({data:{FCM_MSG:{data:{kind:'call_cancel'}}}}),true);
+});
+
+test('web notifications show the server-written title and body, with generic text as fallback',()=>{
+  const data={kind:'message',event:'m1',title:'Alice',body:'📷 Photo · Look!'};
+  assert.equal(notificationTitle(data),'Alice');assert.equal(notificationDetails(data).body,'📷 Photo · Look!');
+  assert.equal(notificationSummary(data),'Alice: 📷 Photo · Look!');
+  assert.equal(notificationSummary({kind:'choice',title:'Alice shared a choice',body:'Which outfit? · 3 photos · Tap to pick one'}),'Alice shared a choice: Which outfit? · 3 photos · Tap to pick one');
+  assert.equal(notificationTitle({kind:'message'}),'Together');assert.equal(notificationDetails({kind:'message'}).body,'New update from your partner.');
+  assert.equal(notificationSummary({kind:'call',call_kind:'video'}),'Incoming video call.');
 });

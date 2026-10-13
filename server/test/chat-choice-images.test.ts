@@ -28,3 +28,25 @@ test('chat returns every ordered choice thumbnail, including older choices and m
     assert.equal((await api.get('/api/messages').set(auth(2))).status,403);
   }finally{await new Promise<void>(resolve=>s.io.close(()=>resolve()));await s.storage.close();await s.db.close();rmSync(dir,{recursive:true,force:true});}
 });
+
+test('replies quote the original message and a choice answer replies to the shared choice',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'together-replies-')),s=await createApp({databasePath:':memory:',uploadDir:dir,origins:[]});
+  try{
+    const api=request(s.server),users:any[]=[];
+    for(const name of ['Asha','Bikash','Stranger'])users.push((await api.post('/api/auth/register').send({name,email:name+'@replies.test',password:'safe-password-123'})).body);
+    const auth=(i:number)=>({Authorization:'Bearer '+users[i].token});const invite=await api.post('/api/pair/invite').set(auth(0));await api.post('/api/pair/join').set(auth(1)).send({code:invite.body.code});
+    const first=await api.post('/api/messages').set(auth(0)).send({text:'Movie tonight?',client_id:'r1'});
+    const reply=await api.post('/api/messages').set(auth(1)).send({text:'Yes!',reply_to:first.body.id,client_id:'r2'});assert.equal(reply.status,201);
+    assert.equal(reply.body.reply_to,first.body.id);assert.equal(reply.body.reply_text,'Movie tonight?');assert.equal(reply.body.reply_sender_name,'Asha');
+    assert.equal((await api.post('/api/messages').set(auth(1)).send({text:'x',reply_to:randomUUID(),client_id:'r3'})).status,404);
+    assert.equal((await api.get('/api/messages').set(auth(2))).status,403);
+    const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jJ1sAAAAASUVORK5CYII=','base64');
+    const upload=await api.post('/api/media?purpose=choice').set(auth(0)).attach('file',png,{filename:'c.png',contentType:'image/png'});
+    const choice=await api.post('/api/decisions').set(auth(0)).send({title:'Which cafe?',mode:'choose',options:[{media_id:upload.body.id},{media_id:upload.body.id}]});
+    await api.post('/api/decisions/'+choice.body.id+'/vote').set(auth(1)).send({option_id:choice.body.options[1].id});
+    const history=(await api.get('/api/messages').set(auth(0))).body;
+    const shared=history.find((m:any)=>m.choice_event==='shared'),answer=history.find((m:any)=>m.choice_event==='chosen');
+    assert.equal(answer.reply_to,shared.id);assert.equal(answer.choice_title,'Which cafe?');assert.equal(answer.choice_mode,'choose');assert.equal(answer.media_id,upload.body.id);assert.equal(answer.reply_text,'New choice: Which cafe?');assert.equal(answer.reply_decision_id,choice.body.id);assert.equal(answer.reply_sender_name,'Asha');
+    assert.equal(history.find((m:any)=>m.id===first.body.id).reply_to,null);
+  }finally{await new Promise<void>(resolve=>s.io.close(()=>resolve()));await s.db.close();rmSync(dir,{recursive:true,force:true});}
+});

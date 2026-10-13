@@ -1,3 +1,4 @@
+import compression from 'compression';
 import express from 'express';
 import { communication, CommunicationOptions } from './communication.js';
 import { createServer } from 'node:http';
@@ -22,7 +23,7 @@ export async function createApp(options: {databasePath?:string;database?:Databas
   validateStorage(options.storage||{});
   const app=express();
   app.set('trust proxy',1);
-  app.disable('x-powered-by'); app.use(helmet({contentSecurityPolicy:{directives:{imgSrc:["'self'",'data:','blob:'],connectSrc:["'self'",'https://firebaseinstallations.googleapis.com','https://fcmregistrations.googleapis.com'],mediaSrc:["'self'",'blob:'],upgradeInsecureRequests:null}}}),cors({origin:options.origins,credentials:true}),express.json({limit:'64kb'}));
+  app.disable('x-powered-by'); app.use(helmet({contentSecurityPolicy:{directives:{imgSrc:["'self'",'data:','blob:'],connectSrc:["'self'",'https://firebaseinstallations.googleapis.com','https://fcmregistrations.googleapis.com'],mediaSrc:["'self'",'blob:'],upgradeInsecureRequests:null}}}),cors({origin:options.origins,credentials:true}),compression(),express.json({limit:'64kb'}));
   const server=createServer(app); const io=new Server(server,{cors:{origin:options.origins},maxHttpBufferSize:64*1024});
   const db=await openDatabase(options.database||options.databasePath||{driver:'mysql'}),storage=createStorage(db,options.storage);
   await db.prepare("UPDATE incoming_calls SET state='ended' WHERE state!='ended'").run();
@@ -39,7 +40,9 @@ export async function createApp(options: {databasePath?:string;database?:Databas
   app.use('/api/messages',chatRoutes(c,comm.notify));app.use('/api/media',mediaRoutes(c));app.use('/api/decisions',decisionsRoutes(c,comm.notify));app.use('/api/plans',plansRoutes(c));app.use('/api/trips',tripsRoutes(c));
   realtime(c,comm.bind);
   app.use('/api',(_req,res)=>res.status(404).json({error:'Endpoint not found.'}));
-  if(options.webDir){app.use(express.static(options.webDir));app.get('/{*path}',(_req,res)=>res.sendFile(resolve(options.webDir!,'index.html')));}
+  if(options.webDir){
+    // Build output names carry a content hash, so they never change; index.html and the service worker must always revalidate.
+    app.use(express.static(options.webDir,{setHeaders:(res,path)=>res.setHeader('Cache-Control',/-[A-Z0-9]{8}\.(js|css)$/.test(path)?'public, max-age=31536000, immutable':'no-cache')}));app.get('/{*path}',(_req,res)=>res.sendFile(resolve(options.webDir!,'index.html')));}
   app.use((error:any,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{
     if(error instanceof ZodError){res.status(400).json({error:error.issues.map(i=>`${i.path.join('.')}: ${i.message}`).join('; ')});return;}
     if(error instanceof HttpError){res.status(error.status).json({error:error.message});return;}

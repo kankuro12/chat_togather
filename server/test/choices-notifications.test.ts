@@ -9,6 +9,8 @@ import {createApp} from '../src/app.js';
 import {jobQueue} from '../src/jobs.js';
 import {pushHandler} from '../src/push-job.js';
 import {hash,now} from '../src/context.js';
+import {pushText} from '../src/push-text.js';
+import {buildPushMessage} from '../src/firebase.js';
 
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jJ1sAAAAASUVORK5CYII=','base64');
 
@@ -80,5 +82,47 @@ test('pending choice badge tracks choose and rate completion without list or rea
     assert.equal((await api.get('/api/decisions/pending')).status,401);
     const outsider=(await api.post('/api/auth/register').send({name:'Outsider',email:`o-${randomUUID()}@test.invalid`,password:'safe-password-123'})).body;
     assert.equal((await api.get('/api/decisions/pending').set(auth(outsider))).status,403);
+  }finally{await new Promise<void>(resolve=>app.io.close(()=>resolve()));await app.storage.close();await app.db.close();rmSync(uploadDir,{recursive:true,force:true});}
+});
+
+test('push text says what happened: chat text, media type and length, new choice, choice answer',async()=>{
+  const {app,api,alice,bob,auth,uploadDir}=await pair();
+  try{
+    const couple=(await app.db.prepare('SELECT couple_id FROM memberships WHERE user_id=?').get(alice.user.id))!.couple_id;
+    const text=await api.post('/api/messages').set(auth(alice)).send({text:'Dinner at 7?',client_id:'push-text'});
+    assert.deepEqual(await pushText(app.db,couple,'message',text.body.id,true),{title:'Alice',body:'Dinner at 7?'});
+    const webm=Buffer.from('1a45dfa39f4286810142f7810142f2810442f381084282847765626d4287810442858102','hex');
+    const clip=await api.post('/api/media').set(auth(alice)).attach('file',webm,{filename:'voice.webm',contentType:'audio/webm'}).field('duration','65');
+    const voice=await api.post('/api/messages').set(auth(alice)).send({text:'',media_id:clip.body.id,client_id:'push-voice'});
+    assert.deepEqual(await pushText(app.db,couple,'message',voice.body.id,true),{title:'Alice',body:'🎤 Voice message (1:05)'});
+    const photo=await api.post('/api/media').set(auth(alice)).attach('file',png,{filename:'p.png',contentType:'image/png'});
+    const captioned=await api.post('/api/messages').set(auth(alice)).send({text:'Look!',media_id:photo.body.id,client_id:'push-photo'});
+    assert.deepEqual(await pushText(app.db,couple,'message',captioned.body.id,true),{title:'Alice',body:'📷 Photo · Look!'});
+    const upload=await api.post('/api/media?purpose=choice').set(auth(alice)).attach('file',png,{filename:'c.png',contentType:'image/png'});
+    const choice=await api.post('/api/decisions').set(auth(alice)).send({title:'Which outfit?',mode:'rate',options:[{media_id:upload.body.id},{media_id:upload.body.id},{media_id:upload.body.id}]});
+    assert.deepEqual(await pushText(app.db,couple,'choice',choice.body.id,true),{title:'Alice shared a choice',body:'Which outfit? · 3 photos · Tap to rate them'});
+    await api.post('/api/decisions/'+choice.body.id+'/vote').set(auth(bob)).send({option_id:choice.body.options[1].id,rating:5});
+    const answer=(await app.db.prepare("SELECT m.id FROM messages m JOIN message_decisions md ON md.message_id=m.id WHERE md.event='chosen'").get())!.id;
+    assert.deepEqual(await pushText(app.db,couple,'message',answer,true),{title:'Bob answered your choice',body:'Rated image 2 5/5: Which outfit?'});
+    assert.equal(await pushText(app.db,randomUUID(),'message',text.body.id),undefined);
+    assert.deepEqual(await pushText(app.db,couple,'message',text.body.id),{title:'Together',body:'New message'});
+    assert.deepEqual(await pushText(app.db,couple,'message',voice.body.id),{title:'Together',body:'🎤 New voice message'});
+    assert.deepEqual(await pushText(app.db,couple,'message',captioned.body.id),{title:'Together',body:'📷 New photo'});
+    assert.deepEqual(await pushText(app.db,couple,'choice',choice.body.id),{title:'Together',body:'🖼️ New choice waiting for you'});
+    assert.deepEqual(await pushText(app.db,couple,'message',answer),{title:'Together',body:'Your choice was answered'});
+    // Delivered pushes follow the recipient's own setting, which starts private.
+    await api.post('/api/notifications/token').set(auth(bob)).send({token:'bob-private-device-1234567890'});
+    const texts:any[]=[];const handler=pushHandler(app.db,async(_tokens,_kind,_event,_call,pushed)=>{texts.push(pushed);return [];});const run=jobQueue(app.db);
+    for(const row of await app.db.prepare("SELECT id FROM jobs WHERE type='push'").all() as any[])await app.db.prepare('DELETE FROM jobs WHERE id=?').run(row.id);
+    assert.deepEqual((await api.get('/api/notifications/settings').set(auth(bob))).body,{previews:false});
+    await api.post('/api/messages').set(auth(alice)).send({text:'Secret plan',client_id:'push-private'});while(await run.runOne({push:handler})){}
+    assert.deepEqual(texts.at(-1),{title:'Together',body:'New message'});
+    assert.deepEqual((await api.put('/api/notifications/settings').set(auth(bob)).send({previews:true})).body,{previews:true});
+    assert.equal((await api.put('/api/notifications/settings').set(auth(bob)).send({previews:'yes'})).status,400);
+    await api.post('/api/messages').set(auth(alice)).send({text:'Secret plan 2',client_id:'push-preview'});while(await run.runOne({push:handler})){}
+    assert.deepEqual(texts.at(-1),{title:'Alice',body:'Secret plan 2'});
+    assert.deepEqual((await api.get('/api/notifications/settings').set(auth(alice))).body,{previews:false});
+    const message=buildPushMessage(['device'],'message',text.body.id,undefined,{title:'Alice',body:'Dinner at 7?'});
+    assert.deepEqual(message.android?.notification,{title:'Alice',body:'Dinner at 7?',visibility:'private',tag:text.body.id});assert.equal(message.data?.body,'Dinner at 7?');
   }finally{await new Promise<void>(resolve=>app.io.close(()=>resolve()));await app.storage.close();await app.db.close();rmSync(uploadDir,{recursive:true,force:true});}
 });

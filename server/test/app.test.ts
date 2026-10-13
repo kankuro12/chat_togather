@@ -63,6 +63,15 @@ test('chat persists messages, deduplicates retries, and denies unpaired users', 
   assert.equal((await api.get('/api/messages').set(auth(outsider.token))).status,403);
 });
 
+test('message polling returns only recent messages after a known one',async()=>{
+  const first=await api.post('/api/messages').set(auth(a.token)).send({text:'poll one',client_id:'poll-1'});
+  const second=await api.post('/api/messages').set(auth(b.token)).send({text:'poll two',client_id:'poll-2'});
+  const newer=await api.get(`/api/messages?after=${first.body.id}`).set(auth(a.token));assert.equal(newer.status,200);
+  assert.ok(newer.body.some((m:any)=>m.id===second.body.id));
+  const ids=newer.body.map((m:any)=>m.created_at+m.id);assert.deepEqual(ids,[...ids].sort());
+  assert.equal((await api.get(`/api/messages?after=${first.body.id}`).set(auth(outsider.token))).status,403);
+});
+
 test('uploads require actual supported media; media is private to pair',async()=>{
   assert.equal((await api.post('/api/media').set(auth(a.token)).attach('file',Buffer.from('fake'),{filename:'dress.png',contentType:'image/png'})).status,400);
   const upload=await api.post('/api/media').set(auth(a.token)).attach('file',png,{filename:'dress.png',contentType:'image/png'});assert.equal(upload.status,201);mediaId=upload.body.id;
@@ -71,6 +80,18 @@ test('uploads require actual supported media; media is private to pair',async()=
   assert.equal((await api.get(`/api/media/${mediaId}`).set(auth(outsider.token))).status,403);
   const msg=await api.post('/api/messages').set(auth(b.token)).send({text:'Look!',media_id:mediaId,client_id:'media-message'});assert.equal(msg.status,201);
   assert.equal(msg.body.media_mime,'image/png');
+});
+
+test('uploads keep a browser-made preview so chats load thumbnails before full media',async()=>{
+  const webm=Buffer.from('1a45dfa39f4286810142f7810142f2810442f381084282847765626d4287810442858102','hex');
+  const video=await api.post('/api/media').set(auth(a.token)).attach('file',webm,{filename:'clip.webm',contentType:'video/webm'}).attach('thumb',png,{filename:'clip.png',contentType:'image/png'}).field('duration','12.5').field('width','640').field('height','360');
+  assert.equal(video.status,201);assert.equal(video.body.duration,12.5);assert.equal(video.body.width,640);assert.ok(video.body.thumb);
+  const thumb=await api.get(`/api/media/${video.body.id}/thumb`).set(auth(b.token));assert.equal(thumb.status,200);assert.equal(thumb.headers['content-type'],'image/png');assert.equal(thumb.headers['cache-control'],'private, max-age=31536000, immutable');assert.equal((await api.get(`/api/media/${video.body.id}`).set(auth(b.token))).headers['cache-control'],'private, no-store');
+  assert.equal((await api.get(`/api/media/${video.body.id}/thumb`).set(auth(outsider.token))).status,403);
+  assert.equal((await api.get(`/api/media/${mediaId}/thumb`).set(auth(a.token))).status,404);
+  const msg=await api.post('/api/messages').set(auth(a.token)).send({text:'',media_id:video.body.id,client_id:'video-preview'});assert.equal(msg.body.media_duration,12.5);assert.ok(msg.body.media_thumb);
+  assert.equal((await api.post('/api/media').set(auth(a.token)).attach('file',webm,{filename:'clip.webm',contentType:'video/webm'}).attach('thumb',Buffer.from('fake'),{filename:'t.png',contentType:'image/png'})).status,400);
+  assert.equal((await api.post('/api/media').set(auth(a.token)).attach('file',webm,{filename:'clip.webm',contentType:'video/webm'}).field('duration','-1')).status,400);
 });
 
 test('choices replace prior selection; ratings enforce bounds and option membership',async()=>{

@@ -2,7 +2,6 @@ import { Component, HostListener, ViewChild, inject, signal } from '@angular/cor
 import { FormsModule } from '@angular/forms';
 import { IonIcon, IonSpinner } from '@ionic/angular/standalone';
 import { Api } from './api';
-import QRCode from 'qrcode';
 import { QrScanner } from './qr-scanner';
 @Component({selector:'auth-page',standalone:true,imports:[FormsModule,IonIcon,IonSpinner,QrScanner],template:`
 <div class="onboarding" [class.login-screen]="!api.user() && mode()==='login'" [class.signup-screen]="!api.user() && mode()==='register'">
@@ -59,7 +58,7 @@ export class AuthPage {
   sendCode(){void this.api.action(async()=>{const phone=this.phone.replace(/[\s()-]/g,'');const sent=await this.api.request('/auth/phone/send',{phone,...(this.mode()==='register'?{name:this.name}:{})});this.challenge.set(sent.challenge);this.sentPhone.set(phone);this.otp='';this.remaining.set(sent.retryAfter);clearInterval(this.timer);const until=Date.now()+sent.retryAfter*1000;this.timer=setInterval(()=>{this.remaining.set(Math.max(0,Math.ceil((until-Date.now())/1000)));if(!this.remaining())clearInterval(this.timer);},1000);});}
   verifyCode(){void this.api.action(async()=>{await this.api.acceptSession(await this.api.request('/auth/phone/verify',{challenge:this.challenge(),code:this.otp}));this.otp='';this.challenge.set('');});}
   ngOnDestroy(){clearInterval(this.timer);}
-  invite(){void this.api.action(async()=>{const invitation=await this.api.request('/pair/invite',{});this.qr.set(await QRCode.toDataURL(invitation.code,{width:224,margin:4,errorCorrectionLevel:'M'}));this.code.set(invitation.code);this.copied.set(false);});}
+  invite(){void this.api.action(async()=>{const invitation=await this.api.request('/pair/invite',{});const QRCode=(await import('qrcode')).default;this.qr.set(await QRCode.toDataURL(invitation.code,{width:224,margin:4,errorCorrectionLevel:'M'}));this.code.set(invitation.code);this.copied.set(false);});}
   join(){void this.api.action(async()=>{await this.api.request('/pair/join',{code:this.joinCode});await this.api.me();});}
   copy(){void this.api.action(async()=>{await navigator.clipboard.writeText(this.code());this.copied.set(true);});}
   signOut(){void this.api.action(async()=>{await this.api.logout();this.code.set('');this.qr.set('');this.joinCode='';this.copied.set(false);this.pairMode.set('invite');this.profileName='';this.name='';this.email='';this.password='';this.phone='';this.changeNumber();this.remaining.set(0);clearInterval(this.timer);this.mode.set('login');location.hash='login';});}

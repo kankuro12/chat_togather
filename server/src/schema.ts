@@ -28,6 +28,9 @@ CREATE TABLE IF NOT EXISTS push_tokens(token TEXT NOT NULL,user_id VARCHAR(36) N
 CREATE TABLE IF NOT EXISTS incoming_calls(id VARCHAR(36) PRIMARY KEY,couple_id VARCHAR(36) NOT NULL,caller_id VARCHAR(36) NOT NULL,callee_id VARCHAR(36) NOT NULL,kind VARCHAR(10) NOT NULL,state VARCHAR(20) NOT NULL,expires_at BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS jobs(id VARCHAR(255) PRIMARY KEY,type VARCHAR(100) NOT NULL,payload LONGTEXT NOT NULL,state VARCHAR(20) NOT NULL DEFAULT 'queued',attempts INT NOT NULL DEFAULT 0,run_at BIGINT NOT NULL,lease_until BIGINT,owner VARCHAR(36),progress INT NOT NULL DEFAULT 0,error TEXT,created_at BIGINT NOT NULL,finished_at BIGINT,INDEX jobs_due(state,run_at,lease_until));
 CREATE TABLE IF NOT EXISTS chat_reading(session_hash CHAR(64) PRIMARY KEY,expires_at BIGINT NOT NULL);
+CREATE TABLE IF NOT EXISTS media_previews(media_id VARCHAR(36) PRIMARY KEY,thumb_filename VARCHAR(255),thumb_mime VARCHAR(100),duration DOUBLE,width INT,height INT,FOREIGN KEY(media_id) REFERENCES media(id));
+CREATE TABLE IF NOT EXISTS message_replies(message_id VARCHAR(36) PRIMARY KEY,reply_to_id VARCHAR(36) NOT NULL,FOREIGN KEY(message_id) REFERENCES messages(id),FOREIGN KEY(reply_to_id) REFERENCES messages(id));
+CREATE TABLE IF NOT EXISTS notification_settings(user_id VARCHAR(36) PRIMARY KEY,previews INT NOT NULL DEFAULT 0,FOREIGN KEY(user_id) REFERENCES users(id));
 INSERT IGNORE INTO migrations(version) VALUES(1);
 `;
 
@@ -42,4 +45,17 @@ CREATE TABLE IF NOT EXISTS incoming_calls(id TEXT PRIMARY KEY,couple_id TEXT NOT
 CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,type TEXT NOT NULL,payload TEXT NOT NULL,state TEXT NOT NULL DEFAULT 'queued',attempts INTEGER NOT NULL DEFAULT 0,run_at INTEGER NOT NULL,lease_until INTEGER,owner TEXT,progress INTEGER NOT NULL DEFAULT 0,error TEXT,created_at INTEGER NOT NULL,finished_at INTEGER);
 CREATE INDEX IF NOT EXISTS jobs_due ON jobs(state,run_at,lease_until);
 CREATE TABLE IF NOT EXISTS chat_reading(session_hash TEXT PRIMARY KEY,expires_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS media_previews(media_id TEXT PRIMARY KEY REFERENCES media(id),thumb_filename TEXT,thumb_mime TEXT,duration REAL,width INTEGER,height INTEGER);
+CREATE TABLE IF NOT EXISTS message_replies(message_id TEXT PRIMARY KEY REFERENCES messages(id),reply_to_id TEXT NOT NULL REFERENCES messages(id));
+CREATE TABLE IF NOT EXISTS notification_settings(user_id TEXT PRIMARY KEY REFERENCES users(id),previews INTEGER NOT NULL DEFAULT 0);
+-- SQLite does not index foreign keys on its own; these cover each per-couple list endpoint.
+CREATE INDEX IF NOT EXISTS media_recent ON media(couple_id,created_at);
+CREATE INDEX IF NOT EXISTS decisions_couple ON decisions(couple_id,created_at);
+CREATE INDEX IF NOT EXISTS decision_options_decision ON decision_options(decision_id,position);
+CREATE INDEX IF NOT EXISTS message_decisions_decision ON message_decisions(decision_id);
+CREATE INDEX IF NOT EXISTS plans_couple ON plans(couple_id);
+CREATE INDEX IF NOT EXISTS trips_couple ON trips(couple_id);
+CREATE INDEX IF NOT EXISTS itinerary_trip ON itinerary_items(trip_id);
+CREATE INDEX IF NOT EXISTS checklist_trip ON checklist_items(trip_id);
+CREATE INDEX IF NOT EXISTS push_tokens_user ON push_tokens(user_id);
 `;

@@ -14,7 +14,7 @@ export class Calendar {
 }
 @Pipe({name:'calendarDate',standalone:true,pure:false})
 export class CalendarDate implements PipeTransform {calendar=inject(Calendar);transform(value:string,pattern='MMM d, y',timezone?:string){return this.calendar.display(value,pattern,timezone);}}
-@Component({selector:'calendar-switch',standalone:true,template:`<div class="calendar-switch" aria-label="Calendar"><button type="button" [class.active]="calendar.mode()==='ad'" [attr.aria-pressed]="calendar.mode()==='ad'" (click)="calendar.set('ad')">AD</button><button type="button" [class.active]="calendar.mode()==='bs'" [attr.aria-pressed]="calendar.mode()==='bs'" (click)="calendar.set('bs')">BS</button></div>`})
+@Component({selector:'calendar-switch',standalone:true,template:`<div class="calendar-field"><span id="calendar-label">Calendar</span><div class="calendar-switch" role="group" aria-labelledby="calendar-label"><button type="button" title="English calendar (AD)" [class.active]="calendar.mode()==='ad'" [attr.aria-pressed]="calendar.mode()==='ad'" (click)="calendar.set('ad')">AD</button><button type="button" title="Nepali calendar (BS)" [class.active]="calendar.mode()==='bs'" [attr.aria-pressed]="calendar.mode()==='bs'" (click)="calendar.set('bs')">BS</button></div></div>`})
 export class CalendarSwitch {calendar=inject(Calendar);}
 @Component({selector:'calendar-input',standalone:true,imports:[FormsModule],template:`
 @if(calendar.mode()==='ad'){<label>{{label()}}<input [name]="label()" [ngModel]="value()" (ngModelChange)="valueChange.emit($event)" [type]="time()?'datetime-local':'date'" [min]="min()" [max]="max()" required></label>}

@@ -1,14 +1,16 @@
 import { compressImage } from './compress-image';
+import { createPreview } from './media-preview';
 import { Injectable, signal, computed } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
 import { Capacitor } from '@capacitor/core';
 import { User, Pair, Media, Message, Decision, Plan, Trip } from './models';
 import { normalizeServerUrl } from './server-url';
+import { appendMessages } from './chat-messages';
 
 @Injectable({providedIn:'root'})
 export class Api {
   user=signal<User|null>(null);pair=signal<Pair|null>(null);booting=signal(true);busy=signal(false);error=signal('');
-  messages=signal<Message[]>([]);media=signal<Media[]>([]);decisions=signal<Decision[]>([]);plans=signal<Plan[]>([]);trips=signal<Trip[]>([]);
+  messages=signal<Message[]>([]);media=signal<Media[]>([]);private thumbs=new Map<string,Promise<string>>();decisions=signal<Decision[]>([]);plans=signal<Plan[]>([]);trips=signal<Trip[]>([]);
   connected=signal(false);online=signal<string[]>([]);typing=signal('');
   unread=signal(0);pendingChoices=signal(0);pendingChoicesReady=signal(false);chatReading=signal(false);partnerRead=signal<{id:string;created_at:string}|null>(null);private lastRead='';private readingPending=false;private readSequence=0;private pendingSequence=0;
   setChatReading(active:boolean){this.chatReading.set(active);this.socket?.emit('chat:view',active);if(active)void this.readLatest();}
@@ -21,7 +23,7 @@ export class Api {
   base=localStorage.getItem('together.server')||'';
   native=Capacitor.isNativePlatform();socket?:Socket;
   private typingTimer?:ReturnType<typeof setTimeout>;private poll?:ReturnType<typeof setInterval>;
-  private reloadSequences:Record<string,number>={};
+  private running:Record<string,Promise<void>|undefined>={};private queued:Record<string,Promise<void>|undefined>={};
   constructor(){void this.initialize();setInterval(()=>{if(this.chatReading())this.socket?.emit('chat:view',document.visibilityState==='visible'&&document.hasFocus());},20000);}
   async initialize(){
     try{
@@ -57,23 +59,34 @@ export class Api {
     sessionStorage.setItem('together.oauth',verifier);location.assign(result.url);
   }
   async logout(){await this.request('/auth/logout',{});this.forget();}
-  private forget(){this.unread.set(0);this.pendingChoices.set(0);this.pendingChoicesReady.set(false);this.pendingSequence++;this.partnerRead.set(null);this.chatReading.set(false);this.lastRead='';this.socket?.disconnect();this.socket?.removeAllListeners();this.socket=undefined;clearTimeout(this.typingTimer);this.token='';localStorage.removeItem('together.session');this.user.set(null);this.pair.set(null);this.messages.set([]);this.media.set([]);this.decisions.set([]);this.plans.set([]);this.trips.set([]);this.connected.set(false);this.typing.set('');this.online.set([]);}
+  private forget(){this.unread.set(0);this.pendingChoices.set(0);this.pendingChoicesReady.set(false);this.pendingSequence++;this.partnerRead.set(null);this.chatReading.set(false);this.lastRead='';this.socket?.disconnect();this.socket?.removeAllListeners();this.socket=undefined;clearTimeout(this.typingTimer);this.token='';localStorage.removeItem('together.session');for(const url of this.thumbs.values())void url.then(URL.revokeObjectURL,()=>{});this.thumbs.clear();this.user.set(null);this.pair.set(null);this.messages.set([]);this.media.set([]);this.decisions.set([]);this.plans.set([]);this.trips.set([]);this.connected.set(false);this.typing.set('');this.online.set([]);}
   async reload(area?:string){
     if(!this.pair())return;
-    const token=this.token;const pairId=this.pair()?.id;
     const areas=['messages','media','decisions','plans','trips'].filter(resource=>!area||resource===area);
-    await Promise.all(areas.map(async resource=>{
-      const sequence=this.reloadSequences[resource]=(this.reloadSequences[resource]||0)+1;
-      const data=await this.request('/'+resource);
-      if(token!==this.token||pairId!==this.pair()?.id||sequence!==this.reloadSequences[resource])return;
-      switch(resource){
-        case 'messages':this.messages.set(data);await this.readState();break;
-        case 'media':this.media.set(data);break;
-        case 'decisions':this.decisions.set(data);await this.refreshPendingChoices();break;
-        case 'plans':this.plans.set(data);break;
-        case 'trips':this.trips.set(data);break;
-      }
-    }));
+    await Promise.all(areas.map(resource=>this.refresh(resource)));
+  }
+  /** One request per area at a time; calls that arrive mid-request share a single follow-up instead of each starting their own. */
+  private refresh(resource:string):Promise<void>{
+    const running=this.running[resource];
+    if(running)return this.queued[resource]??=running.catch(()=>{}).then(()=>{this.queued[resource]=undefined;return this.refresh(resource);});
+    const run=this.fetchArea(resource).finally(()=>{if(this.running[resource]===run)this.running[resource]=undefined;});
+    this.running[resource]=run;return run;
+  }
+  private async fetchArea(resource:string){
+    const token=this.token;const pairId=this.pair()?.id;
+    // Messages never change once sent, so after the first load only newer ones are fetched.
+    const last=resource==='messages'?this.messages().at(-1):undefined;
+    let data:any[]|undefined;
+    if(last)data=await this.request<Message[]>('/messages?after='+last.id).then(rows=>rows.length<100?rows:undefined,()=>undefined);
+    const incremental=!!data;data??=await this.request<any[]>('/'+resource);
+    if(token!==this.token||pairId!==this.pair()?.id)return;
+    switch(resource){
+      case 'messages':{const next=incremental?appendMessages(this.messages(),data):data;if(next!==this.messages()){this.messages.set(next);await this.readState();}break;}
+      case 'media':this.media.set(data);break;
+      case 'decisions':this.decisions.set(data);await this.refreshPendingChoices();break;
+      case 'plans':this.plans.set(data);break;
+      case 'trips':this.trips.set(data);break;
+    }
   }
   private connect(){
     this.socket?.disconnect();this.socket=io(this.base||location.origin,{auth:{token:this.token}});
@@ -86,7 +99,9 @@ export class Api {
   }
   sendTyping(active:boolean){this.socket?.emit('typing',active);}
   async mutate(path:string,body?:unknown,method?:string){const result=await this.request(path,body,method);await this.reload(path.split('/')[1]);return result;}
-  async upload(file:File,purpose?:'choice'){file=await compressImage(file);if(file.size>15*1024*1024)throw new Error('Media must be smaller than 15 MB.');const form=new FormData();form.append('file',file);return this.request<Media>('/media'+(purpose==='choice'?'?purpose=choice':''),form);}
+  async upload(file:File,purpose?:'choice'){file=await compressImage(file);if(file.size>15*1024*1024)throw new Error('Media must be smaller than 15 MB.');const preview=await createPreview(file);const form=new FormData();form.append('file',file);if(preview.thumb)form.append('thumb',preview.thumb,'thumb');for(const key of ['duration','width','height'] as const)if(preview[key])form.append(key,String(preview[key]));return this.request<Media>('/media'+(purpose==='choice'?'?purpose=choice':''),form);}
+  /** Thumbnails are tiny and reused across pages, so they stay cached until sign-out. */
+  thumbUrl(id:string){let url=this.thumbs.get(id);if(!url){url=this.mediaUrl(id+'/thumb');this.thumbs.set(id,url);url.catch(()=>this.thumbs.delete(id));}return url;}
   async mediaUrl(id:string){const backend=normalizeServerUrl(this.base,this.native);const response=await fetch(`${backend}/api/media/${id}`,{headers:{Authorization:`Bearer ${this.token}`}});if(!response.ok)throw new Error('Media unavailable.');return URL.createObjectURL(await response.blob());}
   async action(work:()=>Promise<void>):Promise<boolean>{if(this.busy())return false;this.error.set('');this.busy.set(true);try{await work();return true;}catch(e){this.error.set(this.message(e));return false;}finally{this.busy.set(false);}}
   private message(error:unknown){return error instanceof Error?error.message:'Please try again.';}

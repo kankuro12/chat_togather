@@ -23,6 +23,7 @@ export function chatRoutes(c:Context,notify?:(couple:string,user:string,kind:str
     if(changed)await c.changed(req.identity.coupleId!,'read-state');
     res.json({ok:true});
   });
+  const selectMessages='SELECT m.*,u.name AS sender_name,media.mime AS media_mime,mp.duration AS media_duration,mp.width AS media_width,mp.height AS media_height,(mp.thumb_filename IS NOT NULL) AS media_thumb,md.decision_id,md.event AS choice_event,cd.title AS choice_title,cd.mode AS choice_mode,mr.reply_to_id AS reply_to,rm.text AS reply_text,ru.name AS reply_sender_name,rmedia.mime AS reply_media_mime,rmd.decision_id AS reply_decision_id FROM messages m JOIN users u ON u.id=m.user_id LEFT JOIN media ON media.id=m.media_id LEFT JOIN media_previews mp ON mp.media_id=m.media_id LEFT JOIN message_decisions md ON md.message_id=m.id LEFT JOIN decisions cd ON cd.id=md.decision_id LEFT JOIN message_replies mr ON mr.message_id=m.id LEFT JOIN messages rm ON rm.id=mr.reply_to_id LEFT JOIN users ru ON ru.id=rm.user_id LEFT JOIN media rmedia ON rmedia.id=rm.media_id LEFT JOIN message_decisions rmd ON rmd.message_id=rm.id';
   async function withChoiceImages(rows:Row[]){
     const choices=[...new Set(rows.filter(row=>row.decision_id).map(row=>row.decision_id as string))];
     if(!choices.length)return rows;
@@ -33,21 +34,29 @@ export function chatRoutes(c:Context,notify?:(couple:string,user:string,kind:str
     return rows.map(row=>row.decision_id?{...row,choice_images:images.get(row.decision_id)||[]}:row);
   }
   const message=async(resource:string)=>{
-    const row=await c.one('SELECT m.*,u.name AS sender_name,media.mime AS media_mime,md.decision_id,md.event AS choice_event FROM messages m JOIN users u ON u.id=m.user_id LEFT JOIN media ON media.id=m.media_id LEFT JOIN message_decisions md ON md.message_id=m.id WHERE m.id=?',resource);
+    const row=await c.one(`${selectMessages} WHERE m.id=?`,resource);
     return row?(await withChoiceImages([row]))[0]:undefined;
   };
   router.get('/',async(req,res)=>{
+    if(typeof req.query.after==='string'){
+      // Clients poll only for newer messages; the overlap window catches messages whose transaction committed out of timestamp order.
+      const after=await c.owned('messages',req.query.after,req);const since=new Date(Date.parse(after.created_at)-10000).toISOString();
+      const rows=await c.all(`${selectMessages} WHERE m.couple_id=? AND m.created_at>=? ORDER BY m.created_at,m.id LIMIT 100`,req.identity.coupleId,since);
+      res.json(await withChoiceImages(rows));return;
+    }
     const before=typeof req.query.before==='string'?await c.owned('messages',req.query.before,req):null;
-    const rows=await c.all(`SELECT m.*,u.name AS sender_name,media.mime AS media_mime,md.decision_id,md.event AS choice_event FROM messages m JOIN users u ON u.id=m.user_id LEFT JOIN media ON media.id=m.media_id LEFT JOIN message_decisions md ON md.message_id=m.id WHERE m.couple_id=? ${before?'AND (m.created_at<? OR (m.created_at=? AND m.id<?))':''} ORDER BY m.created_at DESC,m.id DESC LIMIT 100`,...([req.identity.coupleId,...(before?[before.created_at,before.created_at,before.id]:[])]));
+    const rows=await c.all(`${selectMessages} WHERE m.couple_id=? ${before?'AND (m.created_at<? OR (m.created_at=? AND m.id<?))':''} ORDER BY m.created_at DESC,m.id DESC LIMIT 100`,...([req.identity.coupleId,...(before?[before.created_at,before.created_at,before.id]:[])]));
     res.json(await withChoiceImages(rows.reverse()));
   });
   router.post('/',rateLimit({windowMs:60000,limit:60,standardHeaders:'draft-8',legacyHeaders:false,message:{error:'Sending too quickly. Try again shortly.'}}),async(req,res)=>{
-    const input=z.object({text:z.string().trim().max(4000).default(''),media_id:z.uuid().optional(),client_id:z.string().min(1).max(100)}).refine(v=>!!v.text||!!v.media_id,'Write a message or attach media.').parse(req.body);
+    const input=z.object({text:z.string().trim().max(4000).default(''),media_id:z.uuid().optional(),reply_to:z.uuid().optional(),client_id:z.string().min(1).max(100)}).refine(v=>!!v.text||!!v.media_id,'Write a message or attach media.').parse(req.body);
     if(input.media_id)await c.owned('media',input.media_id,req);
+    if(input.reply_to)await c.owned('messages',input.reply_to,req);
     const result=await c.transaction(async()=>{
       const existing=await c.one('SELECT id FROM messages WHERE user_id=? AND client_id=?',req.identity.id,input.client_id);
       if(existing)return {resource:existing.id as string,created:false};
       const resource=id();await c.run('INSERT INTO messages VALUES(?,?,?,?,?,?,?)',resource,req.identity.coupleId,req.identity.id,input.text,input.media_id||null,input.client_id,now());
+      if(input.reply_to)await c.run('INSERT INTO message_replies VALUES(?,?)',resource,input.reply_to);
       return {resource,created:true};
     });
     await notify?.(req.identity.coupleId!,req.identity.id,'message',result.resource);

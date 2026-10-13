@@ -3,7 +3,7 @@ import {rateLimit} from 'express-rate-limit';
 import {z} from 'zod';
 import type {Socket} from 'socket.io';
 import {Context,HttpError,id,hash} from './context.js';
-export type CommunicationOptions={firebase?:Record<string,string>;vapidKey?:string;iceServers?:{urls:string|string[];username?:string;credential?:string}[];sendPush?:(tokens:string[],kind:string,event?:string,call?:{id:string;expires:number;name:string;kind:string})=>Promise<string[]>};
+export type CommunicationOptions={firebase?:Record<string,string>;vapidKey?:string;iceServers?:{urls:string|string[];username?:string;credential?:string}[];sendPush?:(tokens:string[],kind:string,event?:string,call?:{id:string;expires:number;name:string;kind:string},text?:import('./push-text.js').PushText)=>Promise<string[]>};
 export function communication(c:Context,options:CommunicationOptions={}){
   const queue=c.storage.queue;
   const calls=new Map<string,{id:string;kind:'audio'|'video';caller:Socket;callee?:Socket;timer:ReturnType<typeof setTimeout>;ready?:Promise<void>}>();
@@ -26,6 +26,9 @@ export function communication(c:Context,options:CommunicationOptions={}){
   router.get('/locations',(req,res)=>res.json([...locations.values()].filter(value=>value.coupleId===req.identity.coupleId&&value.latitude!==undefined&&value.expires_at>Date.now()).map(({timer,socketId,coupleId,...value})=>value)));
   const notifications=Router();notifications.use(c.authenticated,c.paired,rateLimit({windowMs:60000,limit:20,standardHeaders:'draft-8',legacyHeaders:false,message:{error:'Please wait before changing notifications again.'}}));
   notifications.post('/token',async(req,res)=>{const {token}=z.object({token:z.string().min(20).max(4096)}).parse(req.body);for(const row of await c.all('SELECT token,session_hash FROM push_tokens WHERE user_id=?',req.identity.id)){if(!(await c.storage.sessions.get(row.session_hash)))await c.run('DELETE FROM push_tokens WHERE token=?',row.token);}if(Number((await c.one('SELECT count(*) AS n FROM push_tokens WHERE user_id=? AND token!=?',req.identity.id,token))?.n)>=10)throw new HttpError(429,'Too many devices registered. Disable notifications on another device.');await c.run('INSERT INTO push_tokens(token,user_id,session_hash,created_at) VALUES(?,?,?,?) ON CONFLICT(token) DO UPDATE SET user_id=excluded.user_id,session_hash=excluded.session_hash,created_at=excluded.created_at',token,req.identity.id,req.identity.tokenHash,Date.now());res.json({ok:true});});
+  // Message text stays off the lock screen unless the person opts in.
+  notifications.get('/settings',async(req,res)=>res.json({previews:!!Number((await c.one('SELECT previews FROM notification_settings WHERE user_id=?',req.identity.id))?.previews)}));
+  notifications.put('/settings',async(req,res)=>{const {previews}=z.object({previews:z.boolean()}).parse(req.body);await c.run('INSERT INTO notification_settings VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET previews=excluded.previews',req.identity.id,previews?1:0);res.json({previews});});
   notifications.delete('/token',async(req,res)=>{await c.run('DELETE FROM push_tokens WHERE session_hash=?',req.identity.tokenHash);res.json({ok:true});});
   const backgroundNotify=(couple:string,user:string,kind:string,event:string)=>{void notify(couple,user,kind,event).catch(()=>console.error('Could not queue call notification.'));};
   const end=async(couple:string,reason:string)=>{const call=calls.get(couple);if(!call)return;clearTimeout(call.timer);calls.delete(couple);if(call.ready)await call.ready;await c.run("UPDATE incoming_calls SET state='ended' WHERE id=?",call.id);backgroundNotify(couple,call.caller.data.user.id,'call_cancel',call.id);c.io.to(`couple:${couple}`).emit('call:ended',{id:call.id,reason});};
