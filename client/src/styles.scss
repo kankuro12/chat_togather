@@ -514,3 +514,5 @@ chat-page:has(.choice-list){height:auto;min-height:100%;display:block!important}
   /* Partner bubbles sit slightly above the page instead of sinking below it. */
   .message:not(.mine) .bubble{background:var(--color-paper-3)}
 }
+/* Front cameras preview like a mirror; the back camera shows the scene as it is. */
+.self-video.mirrored{transform:scaleX(-1)}
