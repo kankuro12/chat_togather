@@ -44,7 +44,8 @@ test('compact app keeps tasks visible and secondary forms on demand',async({page
   for(const width of [320,375,414,768,1280]){
     await page.setViewportSize({width,height:800});
     for(const name of ['Home','Chat','Choices','Plans','Trips','Memories']){
-      if(await page.getByRole('button',{name:'Back to app',exact:true}).count())await page.getByRole('button',{name:'Back to app',exact:true}).click();await page.getByRole('button',{name,exact:true}).click();
+      if(await page.getByRole('button',{name:'Back to app',exact:true}).count())await page.getByRole('button',{name:'Back to app',exact:true}).click();// Plans and Trips are not in the phone bottom bar; they open from Home.
+      if(await page.getByRole('button',{name,exact:true}).isVisible())await page.getByRole('button',{name,exact:true}).click();else await page.evaluate(page=>location.hash=page,name.toLowerCase());
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
       if(name==='Home'||name==='Chat')expect(await page.locator('.chat-fullscreen,.page-content').evaluate(el=>el.scrollHeight<=el.clientHeight+1)).toBe(true);
       if(name==='Chat')await expect(page.getByLabel('Message your partner')).toBeInViewport();

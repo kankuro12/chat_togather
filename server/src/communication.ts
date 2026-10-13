@@ -3,6 +3,7 @@ import {rateLimit} from 'express-rate-limit';
 import {z} from 'zod';
 import type {Socket} from 'socket.io';
 import {Context,HttpError,id,hash} from './context.js';
+import {notifier} from './notify.js';
 export type CommunicationOptions={firebase?:Record<string,string>;vapidKey?:string;iceServers?:{urls:string|string[];username?:string;credential?:string}[];sendPush?:(tokens:string[],kind:string,event?:string,call?:{id:string;expires:number;name:string;kind:string},text?:import('./push-text.js').PushText)=>Promise<string[]>};
 export function communication(c:Context,options:CommunicationOptions={}){
   const queue=c.storage.queue;
@@ -13,10 +14,7 @@ export function communication(c:Context,options:CommunicationOptions={}){
     for(const row of rows){const session=await c.storage.sessions.get(row.session_hash);if(session?.userId===row.user_id)live.push(row);}
     return live;
   }
-  const notify=async(couple:string,user:string,kind:string,message?:string)=>{
-    const tokens=(await liveTokens('SELECT p.token,p.session_hash,p.user_id FROM push_tokens p JOIN memberships m ON m.user_id=p.user_id WHERE m.couple_id=? AND p.user_id!=?',couple,user)).map(row=>row.token as string);
-    const event=message||id();for(const token of tokens)await queue.enqueue('push',{token,couple,kind,message,event},'push:'+kind+':'+event+':'+hash(token));
-  };
+  const notify=notifier(c.db,c.storage.sessions,queue);
   const router=Router();router.use(c.authenticated,c.paired);
   router.get('/config',(_req,res)=>res.json({firebase:options.firebase||null,vapidKey:options.vapidKey||'',notifications:!!options.sendPush,iceServers:options.iceServers||[{urls:'stun:stun.l.google.com:19302'}]}));
   router.get('/calls/incoming',async(req,res)=>res.json(await c.all("SELECT i.id,i.kind,u.name,i.expires_at FROM incoming_calls i JOIN users u ON u.id=i.caller_id WHERE i.callee_id=? AND i.couple_id=? AND i.state='ringing' AND i.expires_at>?",req.identity.id,req.identity.coupleId,Date.now())));

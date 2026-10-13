@@ -1,7 +1,7 @@
 import {DatabaseSync} from 'node:sqlite';
 import type {Database} from './db.js';
 
-const tables=['users','couples','phone_profiles','memberships','sessions','invitations','media','media_previews','messages','message_reads','decisions','decision_options','decision_votes','choice_media','message_decisions','message_replies','decision_requests','plans','plan_responses','trips','itinerary_items','checklist_items','external_identities','phone_challenges','oauth_states','auth_tickets','push_tokens','notification_settings','incoming_calls','jobs','chat_reading'];
+const tables=['users','couples','phone_profiles','memberships','sessions','invitations','media','media_previews','messages','message_reads','decisions','decision_options','decision_votes','choice_media','message_decisions','message_replies','message_reactions','message_changes','message_pins','message_view_once','message_views','media_waveforms','decision_requests','plans','plan_responses','trips','itinerary_items','checklist_items','external_identities','phone_challenges','oauth_states','auth_tickets','push_tokens','notification_settings','special_dates','shared_lists','list_items','wishes','wish_claims','daily_answers','love_notes','nudges','incoming_calls','jobs','chat_reading'];
 
 export async function importSQLite(path:string,target:Database){
   if(target.driver!=='mysql')throw new Error('SQLite import requires a MySQL target.');

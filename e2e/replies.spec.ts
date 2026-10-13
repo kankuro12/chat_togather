@@ -21,7 +21,7 @@ test('reply to a message, see choice answers as replies, and opt in to lock-scre
   const reply=page.locator('.message',{hasText:'Yes, at 7!'});
   await expect(reply.locator('.message-quote')).toContainText('ReplyA');await expect(reply.locator('.message-quote')).toContainText('Movie tonight?');
   await expect(page.locator('.reply-preview')).toHaveCount(0);
-  await reply.locator('.message-quote').click();await expect(original).toHaveClass(/flash/);
+  await expect(reply).not.toHaveClass(/pending/);await reply.locator('.message-quote').click();await expect(original).toHaveClass(/flash/);
 
   // Phones: swiping a message to the right starts a reply; a vertical drag (scrolling) does not.
   const swipe=(dx:number,dy:number)=>original.evaluate((el,[dx,dy])=>{const box=el.getBoundingClientRect(),x=box.left+20,y=box.top+20;

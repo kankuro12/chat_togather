@@ -1,11 +1,11 @@
 /** Small preview made on the sender's device so chats can show a thumbnail and length without downloading the real file. */
-export type MediaPreview={thumb?:Blob;duration?:number;width?:number;height?:number};
+export type MediaPreview={thumb?:Blob;duration?:number;width?:number;height?:number;waveform?:number[]};
 const THUMB_SIZE=320;
 
 export async function createPreview(file:File):Promise<MediaPreview>{
   const url=URL.createObjectURL(file);
   try{
-    const work=file.type.startsWith('image/')?imagePreview(url):file.type.startsWith('video/')?videoPreview(url):file.type.startsWith('audio/')?audioPreview(url):Promise.resolve({});
+    const work=file.type.startsWith('image/')?imagePreview(url):file.type.startsWith('video/')?videoPreview(url):file.type.startsWith('audio/')?audioPreview(url,file):Promise.resolve({});
     // A preview is a nicety; never block sending on a codec the browser cannot decode.
     return await Promise.race([work,new Promise<MediaPreview>(resolve=>setTimeout(()=>resolve({}),8000))]);
   }catch{return {};}
@@ -27,9 +27,9 @@ async function videoPreview(url:string):Promise<MediaPreview>{
   }finally{video.removeAttribute('src');video.load();}
 }
 
-async function audioPreview(url:string):Promise<MediaPreview>{
+async function audioPreview(url:string,file:File):Promise<MediaPreview>{
   const audio=document.createElement('audio');audio.preload='metadata';audio.src=url;
-  try{await once(audio,'loadedmetadata');return {duration:await knownDuration(audio)};}
+  try{await once(audio,'loadedmetadata');const [duration,waveform]=await Promise.all([knownDuration(audio),peaks(file).catch(()=>undefined)]);return {duration,waveform};}
   finally{audio.removeAttribute('src');audio.load();}
 }
 
@@ -47,6 +47,16 @@ async function thumbnail(source:CanvasImageSource,width:number,height:number){
   const encode=(type:string)=>new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,type,0.7));
   // Safari falls back to PNG for WebP; JPEG keeps the preview small there.
   const webp=await encode('image/webp');return webp?.type==='image/webp'?webp:(await encode('image/jpeg'))||undefined;
+}
+
+/** 48 loudness bars (0–100) so a voice message can show its shape before anyone downloads it. */
+async function peaks(file:File,bars=48){
+  const context=new AudioContext();
+  try{
+    const data=(await context.decodeAudioData(await file.arrayBuffer())).getChannelData(0);const size=Math.max(1,Math.floor(data.length/bars));const result:number[]=[];
+    for(let bar=0;bar<bars;bar++){let max=0;for(let i=bar*size;i<Math.min(data.length,(bar+1)*size);i++)max=Math.max(max,Math.abs(data[i]));result.push(max);}
+    const loudest=Math.max(...result)||1;return result.map(value=>Math.max(4,Math.round(value/loudest*100)));
+  }finally{void context.close();}
 }
 
 function once(target:HTMLMediaElement,event:string){

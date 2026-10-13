@@ -5,7 +5,7 @@ import type {PushText} from './push-text.js';
 type PushCall={id:string;expires:number;name:string;kind:string};
 
 export function buildPushMessage(tokens:string[],kind:string,event?:string,call?:PushCall,text?:PushText):MulticastMessage{
-  const page=kind==='choice'?'choices':'chat';
+  const page=kind==='choice'?'choices':['nudge','question','note','date'].includes(kind)?'us':'chat';
   const title=text?.title||'Together';const body=text?.body||(kind==='choice'?'New choice from your partner.':'New message from your partner.');
   const tag=event?(kind==='choice'?'choice:'+event:event):undefined;
   const nativeCall=(kind==='call'||kind==='call_cancel')&&!!call;

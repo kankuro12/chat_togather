@@ -7,6 +7,9 @@ import { User, Pair, Media, Message, Decision, Plan, Trip } from './models';
 import { normalizeServerUrl } from './server-url';
 import { appendMessages } from './chat-messages';
 
+/** The request never reached the server (offline, server down); safe to retry later. */
+export class OfflineError extends Error{constructor(){super('Cannot reach Together. Check your connection and try again.');this.name='OfflineError';}}
+
 @Injectable({providedIn:'root'})
 export class Api {
   user=signal<User|null>(null);pair=signal<Pair|null>(null);booting=signal(true);busy=signal(false);error=signal('');
@@ -46,7 +49,7 @@ export class Api {
   async request<T=any>(path:string,body?:unknown,method?:string):Promise<T>{
     const backend=normalizeServerUrl(this.base,this.native),token=this.token;
     let response:Response;
-    try{response=await fetch(`${backend}/api${path}`,{credentials:'include',method:method||(body===undefined?'GET':'POST'),headers:{...(token?{Authorization:`Bearer ${token}`} : {}),...(body instanceof FormData?{}:body===undefined?{}:{'Content-Type':'application/json'})},body:body===undefined?undefined:body instanceof FormData?body:JSON.stringify(body)});}catch{throw new Error('Cannot reach Together. Check your connection and try again.');}
+    try{response=await fetch(`${backend}/api${path}`,{credentials:'include',method:method||(body===undefined?'GET':'POST'),headers:{...(token?{Authorization:`Bearer ${token}`} : {}),...(body instanceof FormData?{}:body===undefined?{}:{'Content-Type':'application/json'})},body:body===undefined?undefined:body instanceof FormData?body:JSON.stringify(body)});}catch{throw new OfflineError();}
     const data=await response.json().catch(()=>({error:'Together is unavailable right now. Please try again.'}));
     if(!response.ok){if(response.status===401&&token&&path!=='/auth/login'){if(token!==this.token)throw new Error('');this.forget();this.error.set('You’re signed out. Sign in to continue.');throw new Error('You’re signed out. Sign in to continue.');}throw new Error(data.error||'Request failed.');}return data;
   }
@@ -93,13 +96,27 @@ export class Api {
     this.socket.on('connect',()=>{this.connected.set(true);this.socket?.emit('chat:view',this.chatReading());void this.reload().catch(e=>this.error.set(this.message(e)));});
     this.socket.on('disconnect',(reason:string)=>{this.connected.set(false);this.online.set([]);if(reason==='io server disconnect')void this.me().catch(e=>this.error.set(this.message(e)));});
     this.socket.on('connect_error',()=>this.connected.set(false));
-    this.socket.on('changed',(event:{area:string})=>{void (event.area==='read-state'?this.readState():this.reload(event.area)).catch(e=>this.error.set(this.message(e)));});
+    this.socket.on('changed',(event:{area:string})=>{if(event.area==='us'){this.usVersion.update(v=>v+1);return;}void (event.area==='read-state'?this.readState():this.reload(event.area)).catch(e=>this.error.set(this.message(e)));});
+    this.socket.on('nudge',(event:{name:string})=>this.nudged.set({name:event.name,at:Date.now()}));
+    this.socket.on('message:updated',(event:{id:string})=>{void this.refreshMessage(event.id).catch(()=>{});});
     this.socket.on('presence',(users:string[])=>this.online.set(users));
     this.socket.on('typing',(event:{name:string;active:boolean})=>{this.typing.set(event.active?`${event.name} is typing…`:'');clearTimeout(this.typingTimer);this.typingTimer=setTimeout(()=>this.typing.set(''),3500);});
   }
+  /** Latest version of a message that changed after it was sent (edit, delete, reaction, pin, opened). */
+  patched=signal<Message|null>(null);pinsVersion=signal(0);
+  /** Bumped when the partner changes anything on the Us tab. */
+  usVersion=signal(0);nudged=signal<{name:string;at:number}|null>(null);
+  async refreshMessage(id:string){const token=this.token;const row=await this.request<Message>('/messages/'+id);if(token===this.token)this.applyMessage(row);}
+  applyMessage(row:Message){this.messages.update(list=>list.some(m=>m.id===row.id)?list.map(m=>m.id===row.id?row:m):list);this.patched.set(row);this.pinsVersion.update(v=>v+1);}
+  async react(id:string,emoji:string|null){this.applyMessage(await this.request<Message>(`/messages/${id}/reaction`,{emoji},'PUT'));}
+  async editMessage(id:string,text:string){this.applyMessage(await this.request<Message>('/messages/'+id,{text},'PATCH'));}
+  async deleteMessage(id:string){this.applyMessage(await this.request<Message>('/messages/'+id,undefined,'DELETE'));}
+  async pin(id:string,pinned:boolean){this.applyMessage(await this.request<Message>(`/messages/${id}/pin`,{pinned},'PUT'));}
+  /** Downloads a view-once photo; for the recipient this is the only time the server hands it out. */
+  async openOnce(id:string){const backend=normalizeServerUrl(this.base,this.native);const response=await fetch(`${backend}/api/messages/${id}/open`,{method:'POST',headers:{Authorization:`Bearer ${this.token}`}});if(!response.ok)throw new Error((await response.json().catch(()=>({}))).error||'Photo unavailable.');return URL.createObjectURL(await response.blob());}
   sendTyping(active:boolean){this.socket?.emit('typing',active);}
   async mutate(path:string,body?:unknown,method?:string){const result=await this.request(path,body,method);await this.reload(path.split('/')[1]);return result;}
-  async upload(file:File,purpose?:'choice'){file=await compressImage(file);if(file.size>15*1024*1024)throw new Error('Media must be smaller than 15 MB.');const preview=await createPreview(file);const form=new FormData();form.append('file',file);if(preview.thumb)form.append('thumb',preview.thumb,'thumb');for(const key of ['duration','width','height'] as const)if(preview[key])form.append(key,String(preview[key]));return this.request<Media>('/media'+(purpose==='choice'?'?purpose=choice':''),form);}
+  async upload(file:File,purpose?:'choice'){file=await compressImage(file);if(file.size>15*1024*1024)throw new Error('Media must be smaller than 15 MB.');const preview=await createPreview(file);const form=new FormData();form.append('file',file);if(preview.thumb)form.append('thumb',preview.thumb,'thumb');for(const key of ['duration','width','height'] as const)if(preview[key])form.append(key,String(preview[key]));if(preview.waveform)form.append('waveform',preview.waveform.join(','));return this.request<Media>('/media'+(purpose==='choice'?'?purpose=choice':''),form);}
   /** Thumbnails are tiny and reused across pages, so they stay cached until sign-out. */
   thumbUrl(id:string){let url=this.thumbs.get(id);if(!url){url=this.mediaUrl(id+'/thumb');this.thumbs.set(id,url);url.catch(()=>this.thumbs.delete(id));}return url;}
   async mediaUrl(id:string){const backend=normalizeServerUrl(this.base,this.native);const response=await fetch(`${backend}/api/media/${id}`,{headers:{Authorization:`Bearer ${this.token}`}});if(!response.ok)throw new Error('Media unavailable.');return URL.createObjectURL(await response.blob());}

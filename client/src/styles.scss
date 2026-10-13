@@ -516,3 +516,109 @@ chat-page:has(.choice-list){height:auto;min-height:100%;display:block!important}
 }
 /* Front cameras preview like a mirror; the back camera shows the scene as it is. */
 .self-video.mirrored{transform:scaleX(-1)}
+/* Chat: search, pins, reactions, actions, view once, outbox */
+.chat-search input{flex:1;min-width:0;min-height:44px;margin:0}
+.search-results{flex:1;min-height:0;overflow-y:auto;padding:var(--space-xs);display:flex;flex-direction:column;gap:4px}
+.search-result{display:flex;flex-direction:column;gap:2px;width:100%;padding:10px 12px;border:0;border-radius:var(--radius-input);background:none;color:var(--color-ink);text-align:left;font:inherit;cursor:pointer}
+.search-result:hover,.search-result:focus-visible{background:var(--color-paper-2)}
+.search-result>span:last-child{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.search-meta{display:flex;justify-content:space-between;gap:8px;font-size:12px}.search-meta small{color:var(--color-muted)}
+.pinned-bar{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:6px 16px;border:0;border-bottom:1px solid var(--color-rule);background:var(--color-paper-2);color:var(--color-ink);text-align:left;font:inherit;cursor:pointer;flex-shrink:0}
+.pinned-bar>ion-icon{flex:none;color:var(--color-accent);font-size:18px}
+.pinned-bar>span{display:flex;flex-direction:column;min-width:0}.pinned-bar strong{font-size:11px;color:var(--color-accent)}
+.pinned-bar>span>span{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.message-deleted{display:flex;align-items:center;gap:6px;font-style:italic;opacity:.75}
+.message.deleted .bubble{background:transparent!important;border:1px dashed var(--color-rule);color:var(--color-muted)}
+.message-reactions{display:flex;flex-wrap:wrap;gap:4px;margin:-6px 8px 2px}
+.message.mine .message-reactions{justify-content:flex-end}
+.reaction{display:inline-flex;align-items:center;gap:3px;min-height:28px;padding:2px 8px;border:1px solid var(--color-rule);border-radius:999px;background:var(--color-paper);color:var(--color-ink);font-size:14px;line-height:1;cursor:pointer;box-shadow:0 1px 2px oklch(0% 0 0 / .08)}
+.reaction span{font-size:11px;font-weight:700}
+.reaction.own{border-color:var(--color-accent);background:color-mix(in oklch,var(--color-accent) 12%,var(--color-paper))}
+.message-pin{font-size:12px;margin-right:3px;vertical-align:-1px;color:var(--color-accent)}
+.view-once{display:flex;align-items:center;gap:8px;min-height:44px;padding:8px 12px;border:1px solid currentColor;border-radius:999px;background:none;color:inherit;font:inherit;font-size:13px;cursor:pointer}
+.view-once:disabled{cursor:default;opacity:.7}.view-once ion-icon{font-size:18px}
+.view-once-toggle{display:flex;align-items:center;gap:6px;margin:0;font-size:12px;font-weight:600;color:var(--color-ink);white-space:nowrap}
+.view-once-toggle input{width:18px;height:18px;min-height:0;margin:0;accent-color:var(--color-accent)}
+.message.pending .bubble{opacity:.8}.message.pending.failed .bubble{opacity:1;outline:2px solid var(--color-error);outline-offset:1px}
+.pending-image{display:block;max-width:220px;max-height:220px;border-radius:7px;margin-bottom:6px;object-fit:cover}
+.pending-status{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.pending-status span{display:inline-flex;align-items:center;gap:4px}.pending-status [role=alert]{color:var(--color-error)}
+.pending-status .text-button{min-height:32px;padding:0 4px;font-size:12px}
+.message-sheet{width:min(360px,calc(100% - 24px));padding:12px}
+.reaction-picker{display:flex;justify-content:space-between;gap:2px;padding:4px 0 10px;border-bottom:1px solid var(--color-rule)}
+.reaction-picker button{width:40px;height:40px;border:0;border-radius:50%;background:none;font-size:22px;cursor:pointer;transition:transform .12s}
+.reaction-picker button:hover{transform:scale(1.15)}.reaction-picker button.active{background:color-mix(in oklch,var(--color-accent) 18%,transparent)}
+.sheet-actions{display:flex;flex-direction:column;padding-top:6px}
+.sheet-actions button{display:flex;align-items:center;gap:12px;min-height:46px;padding:0 10px;border:0;border-radius:var(--radius-input);background:none;color:var(--color-ink);font:inherit;font-size:14px;text-align:left;cursor:pointer}
+.sheet-actions button:hover,.sheet-actions button:focus-visible{background:var(--color-paper-2)}
+.sheet-actions ion-icon{font-size:19px;color:var(--color-muted)}.sheet-actions .danger,.sheet-actions .danger ion-icon{color:var(--color-error)}
+.once-viewer{width:min(720px,calc(100vw - 24px));padding:0;border:0;background:oklch(14% 0.01 325);overflow:hidden}
+.once-viewer img{display:block;width:100%;max-height:80dvh;object-fit:contain}
+.once-viewer .once-note{margin:0;padding:10px 16px;color:#fff;font-size:12px;text-align:center}
+.once-viewer .player-close{position:absolute;top:8px;right:8px;color:#fff;background:oklch(14% 0.01 325 / .6);border-radius:50%}
+.edit-preview>div{border-left-color:var(--color-focus)}
+/* Us tab */
+.us-heading p{color:var(--color-muted)}
+.nudge-button{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.nudge-button span{font-size:18px}
+.nudge-note{margin:-6px 0 var(--space-sm);font-size:13px;color:var(--color-accent)}
+.us-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:var(--space-sm);align-items:start}
+.us-card{padding:var(--space-sm);display:flex;flex-direction:column;gap:var(--space-xs);min-width:0}
+.us-card h2{font-size:var(--text-lg);margin:0}
+.us-card-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.us-question{grid-column:1/-1;background:linear-gradient(135deg,color-mix(in oklch,var(--color-accent) 9%,var(--color-paper)),var(--color-paper))}
+.question-text{font-family:var(--font-display);font-size:var(--text-xl);line-height:1.35;margin:0;color:var(--color-ink)}
+.answer-form textarea,.note-form textarea{width:100%;margin:0}
+.us-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:6px}
+.us-actions .fineprint{margin-right:auto}
+.answers{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
+.answer{padding:10px 12px;border-radius:var(--radius-input);background:var(--color-paper);border:1px solid var(--color-rule)}
+.answer strong{font-size:12px;color:var(--color-muted)}.answer p{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.answer.mine{border-color:color-mix(in oklch,var(--color-accent) 40%,var(--color-rule))}
+.question-history{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--color-rule);padding-top:8px}
+.question-history summary{cursor:pointer;font-size:13px;padding:4px 0}.question-history summary span{color:var(--color-muted);margin-right:8px;font-size:12px}
+.question-history p{margin:4px 0 4px 12px;font-size:13px}
+.special-date{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--color-rule)}
+.special-date:first-of-type{border-top:0}
+.special-date strong{display:block;font-size:14px}.special-date small{color:var(--color-muted);font-size:12px}
+.date-icon,.note-icon{font-size:22px;line-height:1}
+.countdown{font-size:12px;font-weight:700;color:var(--color-muted);white-space:nowrap}
+.countdown.today{color:var(--color-accent)}
+.us-tabs{max-width:none;margin:0;overflow-x:auto}
+.us-tabs button{white-space:nowrap}
+.inline-add,.wish-form{display:flex;gap:8px;flex-wrap:wrap}
+.inline-add input{flex:1;min-width:0;margin:0}.wish-form input{flex:1 1 160px;min-width:0;margin:0}
+.check-list,.wish-list,.note-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.check-list li,.wish-list li,.note-list li{display:flex;align-items:center;gap:8px;min-height:44px;border-top:1px solid var(--color-rule)}
+.check-list li:first-child,.wish-list li:first-child,.note-list li:first-child{border-top:0}
+.check-list label{flex:1;display:flex;align-items:center;gap:10px;margin:0;font-size:14px;font-weight:400;color:var(--color-ink);cursor:pointer;min-width:0}
+.check-list input{width:20px;height:20px;min-height:0;margin:0;flex:none;accent-color:var(--color-accent)}
+.check-list li.done span{text-decoration:line-through;color:var(--color-muted)}
+.check-list .icon-button,.wish-list .icon-button,.note-list .icon-button{flex:none;margin-left:auto}
+.wish-list li>div,.note-list li>div{flex:1;min-width:0;display:flex;flex-direction:column;padding:6px 0}
+.wish-list a{font-size:12px;color:var(--color-accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wish-list small{font-size:12px;color:var(--color-success)}.wish-list li.claimed strong{color:var(--color-muted)}
+.wish-list .secondary{flex:none;white-space:nowrap}
+.note-form label{margin:0}.note-form .primary{align-self:flex-end}
+.note-form{display:flex;flex-direction:column;gap:8px}
+.note-list p{margin:2px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}
+.note-list strong{font-size:13px}
+.note-list li.sealed{background:repeating-linear-gradient(-45deg,transparent 0 10px,color-mix(in oklch,var(--color-accent) 5%,transparent) 10px 20px);border-radius:var(--radius-input);padding:0 8px}
+.text-button.danger{color:var(--color-error)}
+.checkbox-label{display:flex;align-items:center;gap:8px}.checkbox-label input{width:18px;height:18px;min-height:0;margin:0}
+@media(max-width:600px){.us-heading{flex-wrap:wrap}.nudge-button{width:100%;justify-content:center}}
+.us-icon{font-size:22px}
+@media(min-width:900px){.home-agenda:has(> .card:nth-child(3)){grid-template-columns:repeat(3,minmax(0,1fr))}}
+/* Seven tabs in the phone bottom bar (Us joined the nav). */
+@media(max-width:639px){
+  .sidebar nav{grid-template-columns:repeat(7,minmax(0,1fr))}
+  .sidebar nav button>span:not(.nav-active-dot){font-size:10px;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+}
+@media(max-width:360px){.sidebar nav button>span:not(.nav-active-dot){font-size:9px;letter-spacing:-.02em}.sidebar{padding-inline:4px}}
+/* Phones: Plans and Trips live on Home instead of the bottom bar. */
+.back-home{display:none}
+@media(max-width:600px){
+  .sidebar nav{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .sidebar nav button.desktop-only{display:none}
+  .back-home{display:inline-flex;align-items:center;gap:6px;margin:0 0 var(--space-2xs);padding-inline:0}
+}
