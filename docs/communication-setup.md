@@ -15,7 +15,7 @@ Set server environment:
 - `FCM_WEB_CONFIG`: JSON object containing Firebase web app public config.
 - `FCM_VAPID_KEY`: Firebase web push public key.
 
-Enable Firebase Cloud Messaging API for the project. Web service worker is built locally; Firebase scripts are bundled rather than loaded from a CDN. Paired user taps Enable notifications; token belongs to current session. Logout removes registration. Push carries generic messages/call notices, never message content or coordinates. Native/web foreground delivery and ordinary realtime updates use existing authenticated app state. Push is a notification; incoming WebRTC calls require both partners online in the app.
+Enable Firebase Cloud Messaging API for the project. Web service worker is built locally; Firebase scripts are bundled rather than loaded from a CDN. Notifications default on after login: web permission is requested when undecided, and granted devices register automatically once paired. A saved explicit opt-out remains off across login/reload. Browser/OS permission still requires the user's approval; browsers that block automatic prompts retain the account notification control. Token belongs to current session. Logout removes registration. Push carries generic messages/call notices, never message content or coordinates. Native/web foreground delivery and ordinary realtime updates use existing authenticated app state. Push is a notification; incoming WebRTC calls require both partners online in the app.
 
 Android: place project `google-services.json` in `client/android/app/`; app ID `com.together.couple` must match.
 
