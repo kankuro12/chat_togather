@@ -42,8 +42,9 @@ try{
   page.on('console',message=>{if(message.type()==='error')console.log('browser-error',message.text());});
   page.on('pageerror',error=>console.log('page-error',error.message));
   await page.goto(web);await page.getByLabel('Account menu').click();
-  await page.getByRole('button',{name:'Enable notifications',exact:true}).click();
-  await page.getByRole('button',{name:'Turn off push',exact:true}).waitFor({timeout:90000});
+  const enable=page.getByRole('button',{name:'Enable notifications',exact:true});
+  if(await enable.isVisible())await enable.click();
+  await page.getByText('Push notifications on.',{exact:true}).waitFor({timeout:90000});
   await page.evaluate(async()=>{const registration=await navigator.serviceWorker.getRegistration('/');await registration.showNotification('Together notification permission check',{tag:'live-permission-check'});const notifications=await registration.getNotifications({tag:'live-permission-check'});if(!notifications.length)throw new Error('Browser cannot display notifications');notifications.forEach(n=>n.close());});
   check('registration',{permission:await page.evaluate(()=>Notification.permission),worker:(await notifications(),context.serviceWorkers().find(w=>w.url().includes('?config='))?'configured':'missing')});
   await page.close();
