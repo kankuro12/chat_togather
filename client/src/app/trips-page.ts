@@ -1,5 +1,5 @@
 import { CalendarDate, CalendarSwitch, CalendarInput } from './calendar';
-import { Component, inject, signal, computed, ViewChild, ElementRef } from '@angular/core';
+import { Component, inject, signal, computed, ViewChild, ElementRef , HostListener} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { IonIcon } from '@ionic/angular/standalone';
 import { Api } from './api';
@@ -21,6 +21,7 @@ import { Trip } from './models';
 }
 <dialog #tripDialog class="modal"><form [attr.aria-busy]="api.busy()" (ngSubmit)="save()">@if(api.error()){<p class="form-error" role="alert">{{api.error()}}</p>}<div class="modal-heading"><div><h2>{{editing?'Edit trip':'New trip'}}</h2></div><button type="button" class="icon-button" aria-label="Close trip form" (click)="tripDialog.close()"><ion-icon name="close-outline"></ion-icon></button></div><label>Trip title<input name="title" [(ngModel)]="form.title" required maxlength="160" placeholder="A weekend for us"></label><label>Destination<input name="destination" [(ngModel)]="form.destination" required maxlength="200" placeholder="Where are we going?"></label><calendar-switch></calendar-switch><div class="form-row"><calendar-input label="Departure date" [(value)]="form.start_date"></calendar-input><calendar-input label="Return date" [(value)]="form.end_date" [min]="form.start_date"></calendar-input></div><details class="optional-fields"><summary>Notes</summary><label>Trip notes<textarea name="notes" [(ngModel)]="form.notes" maxlength="4000" rows="3" placeholder="Anything to remember?"></textarea></label></details><div class="modal-actions"><button class="primary" type="submit" [disabled]="api.busy()">Save trip</button></div></form></dialog>`})
 export class TripsPage {
+  @HostListener('window:together:back',['$event']) back(event:Event){if(this.selectedId()){event.preventDefault();this.selectedId.set(null);}}
   detailTab=signal<'itinerary'|'packing'>('itinerary');
   @ViewChild('activityDialog') activityDialog?:ElementRef<HTMLDialogElement>;
   api=inject(Api);selectedId=signal<string|null>(null);selected=computed(()=>this.api.trips().find(t=>t.id===this.selectedId()));editing:Trip|null=null;

@@ -56,6 +56,7 @@ export class CallPanel implements OnDestroy {
   }
   /** The Android app is showing the call in a system picture-in-picture window: show only the partner. */
   @HostListener('window:native-pip',['$event']) nativePip(event:Event){const on=!!(event as CustomEvent<boolean>).detail;document.documentElement.classList.toggle('pip-mode',on);if(on)this.call.minimized.set(false);}
+  @HostListener('window:together:back',['$event']) nativeBack(event:Event){if(this.call.status()!=='idle'&&!this.call.minimized()&&this.call.status()!=='incoming'){event.preventDefault();this.minimize();}}
   @HostListener('window:popstate') back(){if(this.call.status()!=='idle'&&!this.call.minimized()&&this.call.status()!=='incoming')this.call.minimized.set(true);}
   /** Leaving the tab during a video call: try a system picture-in-picture window (works where the browser allows it). */
   @HostListener('document:visibilitychange') hidden(){if(document.visibilityState==='hidden'&&this.hasVideo()&&!document.pictureInPictureElement)void this.popOut();}

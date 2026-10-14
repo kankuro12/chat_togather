@@ -21,7 +21,7 @@ test('Nepal phone accounts pair using QR image and manual confirmation',async({b
     await b.getByLabel('Partner invitation code').fill(code);await expect(b.getByLabel('Partner invitation code')).toHaveValue(code);
     await b.getByLabel('Partner invitation code').fill('');await b.getByRole('button',{name:'Scan QR code',exact:true}).click();
     await b.locator('input[type=file]').setInputFiles('artifacts/pairing-qr.png');
-    await expect(b.getByLabel('Partner invitation code')).toHaveValue(code);await expect(b.locator('dialog')).not.toBeVisible();
+    await expect(b.getByLabel('Partner invitation code')).toHaveValue(code);await expect(b.locator('dialog.qr-dialog')).not.toBeVisible();
     await expect(b.getByRole('heading',{name:'Better with you'})).toBeVisible();
     await b.getByRole('button',{name:'Join your partner',exact:true}).click();
     await expect(b.getByRole('heading',{name:'Better with you'})).toHaveCount(0);

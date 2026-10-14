@@ -1,7 +1,7 @@
 import {Injectable,inject,signal,effect,untracked} from '@angular/core';
 import { canSwitchCamera, otherFacing, type Facing } from './camera';
 import {Capacitor,registerPlugin} from '@capacitor/core';
-export const NativeCalls=registerPlugin<{configure(input:{url:string;token:string}):Promise<void>;permissionStatus():Promise<{fullScreen:boolean}>;settings():Promise<void>;takeAction():Promise<{id?:string;action?:string}>;clear(input:{id:string}):Promise<void>;setCallState(input:{active:boolean;video:boolean}):Promise<void>}>('NativeCalls');
+export const NativeCalls=registerPlugin<{configure(input:{url:string;token:string}):Promise<void>;permissionStatus():Promise<{fullScreen:boolean}>;settings():Promise<void>;takeAction():Promise<{id?:string;action?:string}>;clear(input:{id:string}):Promise<void>;setCallState(input:{active:boolean;video:boolean;name?:string}):Promise<void>;takeShare():Promise<{text?:string;files?:{path:string;name:string;mime:string;size:number}[];skipped?:number;direct?:boolean;error?:string}>;clearShare():Promise<void>;setPartner(input:{name:string}):Promise<void>}>('NativeCalls');
 import {Api} from './api';
 export interface LocationShare {user_id:string;latitude:number;longitude:number;accuracy:number;expires_at:number;updated_at:number}
 @Injectable({providedIn:'root'})
@@ -12,7 +12,7 @@ export class Communication {
   private callWindow=effect(()=>{const status=this.status(),video=this.kind()==='video';
       untracked(()=>{if(status==='active'&&!this.startedAt())this.startedAt.set(Date.now());if(status==='idle'){this.startedAt.set(0);this.minimized.set(false);}if(status==='incoming')this.minimized.set(false);});
       // Lets the Android app shrink into a system picture-in-picture window when the person leaves it mid-call.
-      if(Capacitor.getPlatform()==='android')void NativeCalls.setCallState({active:status==='active'||status==='connecting',video}).catch(()=>{});
+      if(Capacitor.getPlatform()==='android')void NativeCalls.setCallState({active:status==='active'||status==='connecting',video,name:untracked(()=>this.name())}).catch(()=>{});
   });
   private locationRun=0;private connectionTimer?:ReturnType<typeof setTimeout>;private id='';private peer?:RTCPeerConnection;private candidates:RTCIceCandidateInit[]=[];private signalQueue=Promise.resolve();private watch?:number;private expiry?:ReturnType<typeof setTimeout>;private disconnected?:ReturnType<typeof setTimeout>;private run=0;
   constructor(){window.addEventListener('native-call-action',()=>{if(this.api.connected())void this.resumeIncoming();});effect(onCleanup=>{const connected=this.api.connected(),user=this.api.user(),socket=this.api.socket;if(!connected||!user||!socket){untracked(()=>{this.cleanup();this.stopLocation(false);});return;}

@@ -41,6 +41,8 @@ export async function createApp(options: {databasePath?:string;database?:Databas
   app.use('/api/messages',chatRoutes(c,comm.notify));app.use('/api/media',mediaRoutes(c));app.use('/api/decisions',decisionsRoutes(c,comm.notify));app.use('/api/plans',plansRoutes(c));app.use('/api/trips',tripsRoutes(c));app.use('/api/us',usRoutes(c,comm.notify));
   realtime(c,comm.bind);
   app.use('/api',(_req,res)=>res.status(404).json({error:'Endpoint not found.'}));
+  // Shares only reach the server when the web app's service worker is not installed yet; open the app anyway.
+  app.post('/share-target',(_req,res)=>res.redirect(303,'/#share'));
   if(options.webDir){
     // Build output names carry a content hash, so they never change; index.html and the service worker must always revalidate.
     app.use(express.static(options.webDir,{setHeaders:(res,path)=>res.setHeader('Cache-Control',/-[A-Z0-9]{8}\.(js|css)$/.test(path)?'public, max-age=31536000, immutable':'no-cache')}));app.get('/{*path}',(_req,res)=>res.sendFile(resolve(options.webDir!,'index.html')));}

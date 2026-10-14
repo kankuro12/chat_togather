@@ -65,6 +65,7 @@ export class ChatPage {
     effect(()=>{this.outbox.items().length;if(this.view()==='chat')untracked(()=>{if(this.atBottom())setTimeout(()=>this.jumpLatest(),0);});});
     effect(onCleanup=>{this.api.messages();this.api.typing();const view=this.view();this.atBottom();if(view==='chat'){const timer=setTimeout(()=>{if(this.atBottom())this.jumpLatest();else this.updateReading();},50);onCleanup(()=>clearTimeout(timer));}});}
   @HostListener('window:together:latest') latest(){this.jumpLatest();}
+  @HostListener('window:together:back',['$event']) back(event:Event){if(this.searching()){event.preventDefault();this.closeSearch();}else if(this.editing()){event.preventDefault();this.cancelEdit();}else if(this.replyingTo()){event.preventDefault();this.replyingTo.set(null);}}
   @HostListener('document:visibilitychange') visibility(){this.updateReading();}
   @HostListener('window:focus') focus(){this.updateReading();}
   @HostListener('window:blur') blur(){this.api.setChatReading(false);}
