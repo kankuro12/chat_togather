@@ -31,11 +31,11 @@ const KIND_ICON:Record<string,string>={together:'💞',anniversary:'💍',birthd
     <div class="us-card-heading"><h2 id="lists-title">Lists</h2><button class="icon-button" type="button" aria-label="New list" title="New list" (click)="creatingList.set(!creatingList())" [attr.aria-expanded]="creatingList()"><ion-icon name="add-outline"></ion-icon></button></div>
     @if(creatingList()){<form class="inline-add" (ngSubmit)="newList(listTitle)"><input name="listTitle" [(ngModel)]="listTitle" aria-label="List name" placeholder="List name, e.g. Weekend to-do" maxlength="60" autocomplete="off"><button class="secondary" type="submit" [disabled]="!listTitle.trim()">Create</button></form>}
     @if(lists().length){<div class="segmented list-tabs us-tabs" role="tablist">@for(list of lists();track list.id){<button type="button" role="tab" [class.active]="activeList()?.id===list.id" [attr.aria-selected]="activeList()?.id===list.id" (click)="listId.set(list.id)">{{list.title}}</button>}</div>}
+    <form class="inline-add" (ngSubmit)="addItem(activeList())"><input name="item" [(ngModel)]="itemText" [attr.aria-label]="'Add to '+(activeList()?.title||'your list')" placeholder="Add an item, e.g. Milk" maxlength="160" autocomplete="off"><button class="secondary" type="submit" [disabled]="!itemText.trim()||busy()">Add</button></form>
     @if(activeList();as list){
-      <form class="inline-add" (ngSubmit)="addItem(list)"><input name="item" [(ngModel)]="itemText" [attr.aria-label]="'Add to '+list.title" placeholder="Add an item" maxlength="160" autocomplete="off"><button class="secondary" type="submit" [disabled]="!itemText.trim()">Add</button></form>
       <ul class="check-list">@for(item of list.items;track item.id){<li [class.done]="item.done"><label><input type="checkbox" [checked]="item.done" (change)="toggleItem(item.id,$any($event.target).checked)"><span>{{item.title}}</span></label><button class="icon-button" type="button" [attr.aria-label]="'Remove '+item.title" (click)="removeItem(item.id)"><ion-icon name="close-outline"></ion-icon></button></li>}@empty{<li class="fineprint">Nothing here yet.</li>}</ul>
       <div class="us-actions">@if(doneCount(list)){<button class="text-button" type="button" (click)="clearDone(list)">Clear {{doneCount(list)}} done</button>}<button class="text-button danger" type="button" (click)="deleteList(list)">{{confirmList()===list.id?'Tap again to delete list':'Delete list'}}</button></div>}
-    @else{<p class="fineprint">Groceries, chores, things to do this weekend: one list you both can tick off.</p><button class="secondary" type="button" (click)="newList('Groceries')">Start a grocery list</button>}
+    @else{<p class="fineprint">Groceries, chores, things to do this weekend: one list you both can tick off.</p>}
   </section>
 
   <section class="card us-card" aria-labelledby="wishes-title">
@@ -108,7 +108,9 @@ export class UsPage {
   doneCount(list:SharedList){return list.items.filter(item=>item.done).length;}
   creatingList=signal(false);listTitle='';
   async newList(title:string){const name=title.trim();if(!name)return;const created=await this.run(()=>this.api.request<SharedList>('/us/lists',{title:name}));if(created){this.listId.set(created.id);this.listTitle='';this.creatingList.set(false);await this.load();}}
-  async addItem(list:SharedList){const title=this.itemText.trim();if(!title)return;this.itemText='';if(await this.run(()=>this.api.request(`/us/lists/${list.id}/items`,{title})))await this.load();}
+  /** No list yet? The first item creates one, so adding never needs an extra step. */
+  async addItem(list:SharedList|null){const title=this.itemText.trim();if(!title)return;this.itemText='';
+    const added=await this.run(async()=>{const id=list?.id||(await this.api.request<SharedList>('/us/lists',{title:'Our list'})).id;if(!list)this.listId.set(id);return this.api.request(`/us/lists/${id}/items`,{title});});if(added)await this.load();}
   async toggleItem(id:string,done:boolean){this.lists.update(lists=>lists.map(list=>({...list,items:list.items.map(item=>item.id===id?{...item,done}:item)})));await this.run(()=>this.api.request('/us/items/'+id,{done},'PATCH'));await this.load();}
   async removeItem(id:string){if(await this.run(()=>this.api.request('/us/items/'+id,undefined,'DELETE')))await this.load();}
   async clearDone(list:SharedList){if(await this.run(()=>this.api.request(`/us/lists/${list.id}/clear-done`,{})))await this.load();}

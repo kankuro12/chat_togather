@@ -111,7 +111,8 @@ export function usRoutes(c:Context,notify?:Notify){
   // Love notes that unlock on a chosen date.
   router.get('/notes',async(req,res)=>{
     const rows=await c.all('SELECT n.*,u.name AS author_name FROM love_notes n JOIN users u ON u.id=n.user_id WHERE n.couple_id=? ORDER BY n.unlock_at DESC',couple(req));
-    const time=now();res.json(rows.map(note=>{const locked=note.unlock_at>time;return note.user_id===req.identity.id?{...note,locked}:{...note,locked,text:locked?null:note.text};}));
+    // A note stays completely hidden from the partner (not even shown as sealed) until it opens; the writer always sees their own.
+    const time=now();res.json(rows.filter(note=>note.user_id===req.identity.id||note.unlock_at<=time).map(note=>({...note,locked:note.unlock_at>time})));
   });
   router.post('/notes',async(req,res)=>{
     const input=z.object({text:z.string().trim().min(1).max(4000),unlock_at:z.iso.datetime().transform(value=>new Date(value).toISOString())}).parse(req.body);

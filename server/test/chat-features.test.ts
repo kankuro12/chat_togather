@@ -78,7 +78,7 @@ test('view-once photos open exactly once for the recipient and never appear in m
     const m=await say(0,'',{media_id:photo.id,view_once:true});assert.equal(m.view_once,true);assert.equal(m.viewed,false);
     const seen=(await api.get(`/api/messages/${m.id}`).set(auth(1))).body;assert.equal(seen.media_thumb,0);
     assert.equal((await api.get(`/api/media/${photo.id}`).set(auth(1))).status,403);assert.equal((await api.get(`/api/media/${photo.id}/thumb`).set(auth(1))).status,403);
-    assert.equal((await api.get(`/api/media/${photo.id}`).set(auth(0))).status,200);
+    const own=await api.get(`/api/media/${photo.id}`).set(auth(0));assert.equal(own.status,200);assert.equal(own.headers['cache-control'],'private, no-store','view-once photos are never cached');
     assert.ok(!(await api.get('/api/media').set(auth(1))).body.some((x:any)=>x.id===photo.id));
     const open=await api.post(`/api/messages/${m.id}/open`).set(auth(1));assert.equal(open.status,200);assert.equal(open.headers['content-type'],'image/png');
     assert.equal((await api.post(`/api/messages/${m.id}/open`).set(auth(1))).status,410);
@@ -96,5 +96,25 @@ test('voice uploads keep a waveform that comes back with the message',async()=>{
     const voice=(await api.post('/api/media').set(auth(0)).attach('file',webm,{filename:'v.webm',contentType:'audio/webm'}).field('duration','4').field('waveform',peaks.join(','))).body;
     const m=await say(0,'',{media_id:voice.id});assert.deepEqual(m.media_waveform,peaks);
     assert.equal((await api.post('/api/media').set(auth(0)).attach('file',webm,{filename:'v.webm',contentType:'audio/webm'}).field('waveform','1,2,999')).status,400);
+  }finally{await close();}
+});
+
+test('Memories lists only what was added in Memories; old uploads get thumbnails back-filled once',async()=>{
+  const {api,auth,say,close}=await couple();
+  try{
+    const memory=(await api.post('/api/media?purpose=memory').set(auth(0)).attach('file',png,{filename:'m.png',contentType:'image/png'})).body;
+    const chat=(await api.post('/api/media?purpose=chat').set(auth(0)).attach('file',png,{filename:'c.png',contentType:'image/png'})).body;await say(0,'',{media_id:chat.id});
+    const legacy=(await api.post('/api/media').set(auth(1)).attach('file',png,{filename:'old.png',contentType:'image/png'})).body;
+    const legacyChat=(await api.post('/api/media').set(auth(1)).attach('file',png,{filename:'oldchat.png',contentType:'image/png'})).body;await say(1,'',{media_id:legacyChat.id});
+    const listed=(await api.get('/api/media').set(auth(1))).body.map((m:any)=>m.id).sort();
+    assert.deepEqual(listed,[memory.id,legacy.id].sort(),'chat photos stay out of Memories');
+    assert.equal((await api.post('/api/media?purpose=elsewhere').set(auth(0)).attach('file',png,{filename:'x.png',contentType:'image/png'})).status,400);
+    // Back-fill a thumbnail for media that had none.
+    assert.equal(listed.length,2);assert.equal((await api.get(`/api/media/${legacy.id}/thumb`).set(auth(0))).status,404);
+    assert.equal((await api.post(`/api/media/${legacy.id}/preview`).set(auth(0)).attach('thumb',Buffer.from('nope'),{filename:'t.png',contentType:'image/png'})).status,400);
+    assert.equal((await api.post(`/api/media/${legacy.id}/preview`).set(auth(0)).attach('thumb',png,{filename:'t.png',contentType:'image/png'}).field('width','640').field('height','480')).status,200);
+    assert.equal((await api.get(`/api/media/${legacy.id}/thumb`).set(auth(1))).status,200);
+    const after=(await api.get('/api/media').set(auth(1))).body.find((m:any)=>m.id===legacy.id);assert.ok(after.thumb);assert.equal(after.width,640);
+    assert.equal((await api.post(`/api/media/${legacy.id}/preview`).set(auth(2)).attach('thumb',png,{filename:'t.png',contentType:'image/png'})).status,403);
   }finally{await close();}
 });

@@ -11,7 +11,7 @@ test('Us tab: thinking of you, daily question, dates, lists, secret wishlist and
   try{
     // Thinking of you shows on the partner's screen at once.
     await A.page.getByRole('button',{name:'Thinking of you'}).click();await expect(A.page.getByRole('button',{name:'Sent!'})).toBeVisible();
-    await expect(B.page.locator('.notification-notice')).toContainText('Asha is thinking of you');await expect(B.page.locator('.nudge-note')).toContainText('Asha thought of you');
+    const overlay=B.page.getByRole('alertdialog',{name:'Asha is thinking of you'});await expect(overlay).toBeVisible();await expect(overlay.locator('.nudge-hearts span').first()).toBeAttached();await B.page.screenshot({path:'artifacts/nudge-overlay-375.png'});await overlay.click();await expect(overlay).toHaveCount(0);await expect(B.page.locator('.nudge-note')).toContainText('Asha thought of you');
 
     // Daily question: Bikash only sees Asha's answer after sharing his own.
     await expect(A.page.locator('.question-text')).toHaveText((await B.page.locator('.question-text').innerText()).trim());
@@ -28,8 +28,8 @@ test('Us tab: thinking of you, daily question, dates, lists, secret wishlist and
     await expect(B.page.locator('.us-heading p')).toHaveText('Together for 2 years');
 
     // Shared list ticks off on both phones.
-    await A.page.getByRole('button',{name:'Start a grocery list'}).click();
-    for(const item of ['Milk','Rice'])await A.page.getByLabel('Add to Groceries').fill(item),await A.page.getByLabel('Add to Groceries').press('Enter');
+    // Add items straight away: the first one creates the list.
+    for(const item of ['Milk','Rice']){const input=A.page.getByPlaceholder('Add an item, e.g. Milk');await input.fill(item);await input.press('Enter');await expect(A.page.locator('.check-list li',{hasText:item})).toBeVisible();}
     await expect(B.page.locator('.check-list li')).toHaveCount(2);await B.page.getByLabel('Milk',{exact:true}).check();
     await expect(A.page.locator('.check-list li.done')).toHaveText('Milk');await A.page.getByRole('button',{name:'Clear 1 done'}).click();await expect(B.page.locator('.check-list li')).toHaveCount(1);
 
@@ -38,11 +38,11 @@ test('Us tab: thinking of you, daily question, dates, lists, secret wishlist and
     await B.page.getByRole('tab',{name:'Asha’s'}).click();const wish=B.page.locator('.wish-list li',{hasText:'Pashmina shawl'});await wish.getByRole('button',{name:'I’ll get this'}).click();await expect(wish).toContainText('You’re getting this');
     await A.page.reload();await A.page.getByRole('button',{name:'Us',exact:true}).click();await expect(A.page.locator('.wish-list li',{hasText:'Pashmina shawl'})).toBeVisible();await expect(A.page.getByText(/getting this/)).toHaveCount(0);
 
-    // Love note stays sealed for Bikash until it opens.
+    // A love note stays completely hidden from Bikash until it opens.
     const later=new Date(Date.now()+3*86400000);const local=new Date(later.getTime()-later.getTimezoneOffset()*60000).toISOString().slice(0,16);
     await A.page.getByLabel('Love note',{exact:true}).fill('Open this on our trip ❤️');await A.page.getByLabel('Opens on').fill(local);await A.page.getByRole('button',{name:'Seal note'}).click();
     await expect(A.page.locator('.note-list')).toContainText('Open this on our trip');
-    await expect(B.page.locator('.note-list li.sealed')).toContainText('Sealed note from Asha');await expect(B.page.getByText('Open this on our trip')).toHaveCount(0);await expect(B.page.locator('.note-list')).toContainText('in 3 days');
+    await expect(B.page.locator('.note-list')).toContainText('Seal a note for');await expect(B.page.getByText('Open this on our trip')).toHaveCount(0);await expect(B.page.locator('.note-list li.sealed')).toHaveCount(0);
     await B.page.screenshot({path:'artifacts/us-375.png',fullPage:true});
 
     // Home shows what's next for the two of you.

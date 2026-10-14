@@ -1,10 +1,11 @@
+import {IonIcon} from '@ionic/angular/standalone';
 import { Component, ElementRef, ViewChild, output, signal } from '@angular/core';
 import {canSwitchCamera,otherFacing,type Facing} from './camera';
 type QRReader=typeof import('jsqr').default;
 
-@Component({selector:'qr-scanner',standalone:true,template:`
+@Component({selector:'qr-scanner',standalone:true,imports:[IonIcon],template:`
 <dialog #dialog class="qr-dialog" aria-labelledby="qr-title" (cancel)="stop()" (close)="stop()">
-  <div class="qr-heading"><h2 id="qr-title">Scan invitation</h2><button type="button" class="text-button" (click)="close()" aria-label="Close QR scanner">Close</button></div>
+  <div class="qr-heading"><h2 id="qr-title">Scan invitation</h2><button type="button" class="icon-button" (click)="close()" aria-label="Close QR scanner" title="Close"><ion-icon name="close-outline"></ion-icon></button></div>
   <video #video autoplay playsinline muted [hidden]="!camera()" aria-label="QR camera preview"></video>
   <p>Scan your partner's QR or choose its image.</p>
   @if(error()){<p role="alert">{{error()}}</p>}

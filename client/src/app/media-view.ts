@@ -1,3 +1,4 @@
+import { createPreview } from './media-preview';
 import { Component, input, inject, effect, signal, computed, untracked, afterNextRender, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import {IonIcon} from '@ionic/angular/standalone';
 import { Api } from './api';
@@ -38,9 +39,10 @@ export class MediaView implements OnDestroy {
   });}
   private show(resource:string,visual:boolean,image:boolean,thumb:number|boolean|null|undefined,full:boolean){
     this.release();this.preview.set('');this.failed.set(false);this.loading.set(false);const generation=++this.generation;
+    this.missingThumb=visual&&(thumb===false||thumb===0||thumb===null);
     if(full){void this.load();return;}
-    if(!visual||thumb===false||thumb===0||thumb===null){if(image)void this.load();return;}
-    void this.api.thumbUrl(resource).then(url=>{if(generation===this.generation)this.preview.set(url);}).catch(()=>{if(generation===this.generation&&image)void this.load();});
+    if(!visual||this.missingThumb){if(image)void this.load();return;}
+    void this.api.thumbUrl(resource).then(url=>{if(generation===this.generation)this.preview.set(url);}).catch(()=>{if(generation!==this.generation)return;this.missingThumb=true;if(image)void this.load();});
   }
   openViewer(){this.viewer?.nativeElement.showModal();void this.load();}
   play(){void this.load();}
@@ -49,11 +51,19 @@ export class MediaView implements OnDestroy {
   playerClosed(){this.playerVideo?.nativeElement.pause();}
   async load(){
     if(this.url()||this.loading())return;const generation=this.generation;this.loading.set(true);
-    try{const url=await this.api.mediaUrl(this.id());if(generation===this.generation)this.url.set(url);else URL.revokeObjectURL(url);}
+    try{const url=await this.api.mediaUrl(this.id());if(generation===this.generation){this.url.set(url);if(this.missingThumb&&!this.audio())void this.backfill(this.id(),url);}else URL.revokeObjectURL(url);}
     catch{if(generation===this.generation)this.failed.set(true);}
     finally{if(generation===this.generation)this.loading.set(false);}
   }
   time(seconds:number|null|undefined){if(!seconds)return '–:––';const total=Math.round(seconds);const h=Math.floor(total/3600),m=Math.floor(total%3600/60),s=String(total%60).padStart(2,'0');return h?`${h}:${String(m).padStart(2,'0')}:${s}`:`${m}:${s}`;}
+  private missingThumb=false;private static backfilled=new Set<string>();
+  /** Older media has no thumbnail: once it is downloaded anyway, make a small one so every later view loads fast. */
+  private async backfill(id:string,url:string){
+    if(MediaView.backfilled.has(id))return;MediaView.backfilled.add(id);
+    try{const blob=await (await fetch(url)).blob();const preview=await createPreview(new File([blob],'media',{type:blob.type}));if(!preview.thumb)return;
+      const form=new FormData();form.append('thumb',preview.thumb,'thumb');for(const key of ['duration','width','height'] as const)if(preview[key])form.append(key,String(preview[key]));
+      await this.api.request(`/media/${id}/preview`,form);}catch{/* best effort; the full file still works */}
+  }
   private release(){if(this.url())URL.revokeObjectURL(this.url());this.url.set('');}
   ngOnDestroy(){this.observer?.disconnect();this.generation++;this.release();}
 }

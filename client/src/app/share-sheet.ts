@@ -61,7 +61,7 @@ export class ShareSheet {
     this.finish('chat');
   }
   async saveToMemories(){
-    this.busy.set(true);try{for(const file of this.visual())await this.api.upload(file);await this.api.reload('media');this.finish('memories');}
+    this.busy.set(true);try{for(const file of this.visual())await this.api.upload(file,'memory');await this.api.reload('media');this.finish('memories');}
     catch(error){this.api.error.set((error as Error).message);}finally{this.busy.set(false);}
   }
   async addWish(){

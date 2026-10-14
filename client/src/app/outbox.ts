@@ -33,7 +33,7 @@ export class Outbox {
         this.update(next.client_id,{state:'sending'});
         try{
           let media=next.media_id;
-          if(next.file&&!media){media=(await this.api.upload(next.file)).id;this.update(next.client_id,{media_id:media});}
+          if(next.file&&!media){media=(await this.api.upload(next.file,'chat')).id;this.update(next.client_id,{media_id:media});}
           await this.api.request('/messages',{text:next.text,client_id:next.client_id,...(media?{media_id:media}:{}),...(next.reply_to?{reply_to:next.reply_to}:{}),...(next.view_once?{view_once:true}:{})});
           // Show the real message before removing the placeholder so the bubble never blinks out.
           await this.api.reload('messages').catch(()=>{});this.discard(next.client_id);

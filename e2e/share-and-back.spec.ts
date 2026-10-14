@@ -40,7 +40,7 @@ test('share with Together: from another app into the chat, memories and wishlist
     await expect(page.getByRole('heading',{name:'Us',exact:true})).toBeVisible();await expect(page.locator('.wish-list li',{hasText:'Pashmina shawl'})).toContainText('example.com');
     // A photo saved to Memories.
     await shareFromAnotherApp(page,{image:true});await sheet.getByRole('button',{name:'Save to Memories'}).click();
-    await expect(page.getByRole('heading',{name:'Memories',exact:true})).toBeVisible();await expect(page.locator('.memory-card')).toHaveCount(2,{timeout:15000});
+    await expect(page.getByRole('heading',{name:'Memories',exact:true})).toBeVisible();await expect(page.locator('.memory-card'),'only the photo saved to Memories, not the one sent to chat').toHaveCount(1,{timeout:15000});
     expect(errors).toEqual([]);
   }finally{await context.close();}
 });

@@ -110,7 +110,7 @@ test('love notes stay sealed for the partner until they unlock, then notify',asy
     const unlock=new Date(Date.now()+3600000).toISOString();
     assert.equal((await api.post('/api/us/notes').set(auth(0)).send({text:'Past',unlock_at:new Date(Date.now()-1000).toISOString()})).status,400);
     const note=(await api.post('/api/us/notes').set(auth(0)).send({text:'Open on our anniversary ❤️',unlock_at:unlock})).body;
-    const sealed=(await api.get('/api/us/notes').set(auth(1))).body[0];assert.equal(sealed.locked,true);assert.equal(sealed.text,null);
+    assert.deepEqual((await api.get('/api/us/notes').set(auth(1))).body,[],'the partner does not even see a sealed note');
     assert.equal((await api.get('/api/us/notes').set(auth(0))).body[0].text,'Open on our anniversary ❤️');
     const job=(await s.db.prepare("SELECT run_at FROM jobs WHERE type='note-unlock'").get())!;assert.equal(Number(job.run_at),Date.parse(unlock));
     await s.db.prepare('UPDATE love_notes SET unlock_at=? WHERE id=?').run(new Date(Date.now()-1000).toISOString(),note.id);

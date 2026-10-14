@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS wish_claims(wish_id VARCHAR(36) PRIMARY KEY,user_id V
 CREATE TABLE IF NOT EXISTS daily_answers(couple_id VARCHAR(36) NOT NULL,day VARCHAR(10) NOT NULL,user_id VARCHAR(36) NOT NULL,answer TEXT NOT NULL,created_at VARCHAR(24) NOT NULL,PRIMARY KEY(couple_id,day,user_id),FOREIGN KEY(couple_id) REFERENCES couples(id),FOREIGN KEY(user_id) REFERENCES users(id));
 CREATE TABLE IF NOT EXISTS love_notes(id VARCHAR(36) PRIMARY KEY,couple_id VARCHAR(36) NOT NULL,user_id VARCHAR(36) NOT NULL,text TEXT NOT NULL,unlock_at VARCHAR(24) NOT NULL,created_at VARCHAR(24) NOT NULL,FOREIGN KEY(couple_id) REFERENCES couples(id),FOREIGN KEY(user_id) REFERENCES users(id));
 CREATE TABLE IF NOT EXISTS nudges(id VARCHAR(36) PRIMARY KEY,couple_id VARCHAR(36) NOT NULL,user_id VARCHAR(36) NOT NULL,created_at VARCHAR(24) NOT NULL,INDEX nudges_recent(couple_id,created_at),FOREIGN KEY(couple_id) REFERENCES couples(id),FOREIGN KEY(user_id) REFERENCES users(id));
+CREATE TABLE IF NOT EXISTS memory_media(media_id VARCHAR(36) PRIMARY KEY,FOREIGN KEY(media_id) REFERENCES media(id));
+CREATE TABLE IF NOT EXISTS chat_media(media_id VARCHAR(36) PRIMARY KEY,FOREIGN KEY(media_id) REFERENCES media(id));
 CREATE TABLE IF NOT EXISTS notification_settings(user_id VARCHAR(36) PRIMARY KEY,previews INT NOT NULL DEFAULT 0,FOREIGN KEY(user_id) REFERENCES users(id));
 INSERT IGNORE INTO migrations(version) VALUES(1);
 `;
@@ -81,6 +83,8 @@ CREATE INDEX IF NOT EXISTS shared_lists_couple ON shared_lists(couple_id);
 CREATE INDEX IF NOT EXISTS list_items_list ON list_items(list_id);
 CREATE INDEX IF NOT EXISTS wishes_couple ON wishes(couple_id);
 CREATE INDEX IF NOT EXISTS love_notes_couple ON love_notes(couple_id);
+CREATE TABLE IF NOT EXISTS memory_media(media_id TEXT PRIMARY KEY REFERENCES media(id));
+CREATE TABLE IF NOT EXISTS chat_media(media_id TEXT PRIMARY KEY REFERENCES media(id));
 CREATE TABLE IF NOT EXISTS notification_settings(user_id TEXT PRIMARY KEY REFERENCES users(id),previews INTEGER NOT NULL DEFAULT 0);
 -- SQLite does not index foreign keys on its own; these cover each per-couple list endpoint.
 CREATE INDEX IF NOT EXISTS media_recent ON media(couple_id,created_at);

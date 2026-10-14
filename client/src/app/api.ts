@@ -63,7 +63,7 @@ export class Api {
     sessionStorage.setItem('together.oauth',verifier);location.assign(result.url);
   }
   async logout(){await this.request('/auth/logout',{});this.forget();}
-  private forget(){this.unread.set(0);this.pendingChoices.set(0);this.pendingChoicesReady.set(false);this.pendingSequence++;this.partnerRead.set(null);this.chatReading.set(false);this.lastRead='';this.socket?.disconnect();this.socket?.removeAllListeners();this.socket=undefined;clearTimeout(this.typingTimer);this.token='';localStorage.removeItem('together.session');for(const url of this.thumbs.values())void url.then(URL.revokeObjectURL,()=>{});this.thumbs.clear();this.user.set(null);this.pair.set(null);this.messages.set([]);this.media.set([]);this.decisions.set([]);this.plans.set([]);this.trips.set([]);this.connected.set(false);this.typing.set('');this.online.set([]);}
+  private forget(){this.unread.set(0);this.pendingChoices.set(0);this.pendingChoicesReady.set(false);this.pendingSequence++;this.partnerRead.set(null);this.chatReading.set(false);this.lastRead='';this.socket?.disconnect();this.socket?.removeAllListeners();this.socket=undefined;clearTimeout(this.typingTimer);this.token='';localStorage.removeItem('together.session');if(typeof caches!=='undefined')void caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('together-media-')).map(key=>caches.delete(key)))).catch(()=>{});for(const url of this.thumbs.values())void url.then(URL.revokeObjectURL,()=>{});this.thumbs.clear();this.user.set(null);this.pair.set(null);this.messages.set([]);this.media.set([]);this.decisions.set([]);this.plans.set([]);this.trips.set([]);this.connected.set(false);this.typing.set('');this.online.set([]);}
   async reload(area?:string){
     if(!this.pair())return;
     const areas=['messages','media','decisions','plans','trips'].filter(resource=>!area||resource===area);
@@ -117,10 +117,23 @@ export class Api {
   async openOnce(id:string){const backend=normalizeServerUrl(this.base,this.native);const response=await fetch(`${backend}/api/messages/${id}/open`,{method:'POST',headers:{Authorization:`Bearer ${this.token}`}});if(!response.ok)throw new Error((await response.json().catch(()=>({}))).error||'Photo unavailable.');return URL.createObjectURL(await response.blob());}
   sendTyping(active:boolean){this.socket?.emit('typing',active);}
   async mutate(path:string,body?:unknown,method?:string){const result=await this.request(path,body,method);await this.reload(path.split('/')[1]);return result;}
-  async upload(file:File,purpose?:'choice'){file=await compressImage(file);if(file.size>15*1024*1024)throw new Error('Media must be smaller than 15 MB.');const preview=await createPreview(file);const form=new FormData();form.append('file',file);if(preview.thumb)form.append('thumb',preview.thumb,'thumb');for(const key of ['duration','width','height'] as const)if(preview[key])form.append(key,String(preview[key]));if(preview.waveform)form.append('waveform',preview.waveform.join(','));return this.request<Media>('/media'+(purpose==='choice'?'?purpose=choice':''),form);}
+  /** `purpose` records where an upload belongs, so Memories shows only what was added there. */
+  async upload(file:File,purpose?:'choice'|'memory'|'chat'){file=await compressImage(file);if(file.size>15*1024*1024)throw new Error('Media must be smaller than 15 MB.');const preview=await createPreview(file);const form=new FormData();form.append('file',file);if(preview.thumb)form.append('thumb',preview.thumb,'thumb');for(const key of ['duration','width','height'] as const)if(preview[key])form.append(key,String(preview[key]));if(preview.waveform)form.append('waveform',preview.waveform.join(','));return this.request<Media>('/media'+(purpose?'?purpose='+purpose:''),form);}
   /** Thumbnails are tiny and reused across pages, so they stay cached until sign-out. */
   thumbUrl(id:string){let url=this.thumbs.get(id);if(!url){url=this.mediaUrl(id+'/thumb');this.thumbs.set(id,url);url.catch(()=>this.thumbs.delete(id));}return url;}
-  async mediaUrl(id:string){const backend=normalizeServerUrl(this.base,this.native);const response=await fetch(`${backend}/api/media/${id}`,{headers:{Authorization:`Bearer ${this.token}`}});if(!response.ok)throw new Error('Media unavailable.');return URL.createObjectURL(await response.blob());}
+  /** Photos, videos, voice messages and thumbnails stay on this device after the first view (the server marks them unchanging),
+   *  so they open instantly and work offline. View-once photos are never stored. The cache is cleared on sign-out. */
+  async mediaUrl(id:string){
+    const backend=normalizeServerUrl(this.base,this.native),url=`${backend}/api/media/${id}`;const cache=await this.mediaCache();
+    const hit=await cache?.match(url).catch(()=>undefined);if(hit)return URL.createObjectURL(await hit.blob());
+    const response=await fetch(url,{headers:{Authorization:`Bearer ${this.token}`}});if(!response.ok)throw new Error('Media unavailable.');const blob=await response.blob();
+    if(cache&&/immutable/.test(response.headers.get('cache-control')||''))void cache.put(url,new Response(blob,{headers:{'content-type':blob.type}})).then(()=>this.trimMediaCache(cache)).catch(()=>{});
+    return URL.createObjectURL(blob);
+  }
+  private mediaCacheName(){return 'together-media-'+(this.user()?.id||'anonymous');}
+  private async mediaCache(){try{return typeof caches==='undefined'||!this.user()?undefined:await caches.open(this.mediaCacheName());}catch{return undefined;}}
+  /** Keeps the newest 500 files; older ones are simply downloaded again if needed. */
+  private async trimMediaCache(cache:Cache){const keys=await cache.keys();for(const key of keys.slice(0,Math.max(0,keys.length-500)))await cache.delete(key);}
   async action(work:()=>Promise<void>):Promise<boolean>{if(this.busy())return false;this.error.set('');this.busy.set(true);try{await work();return true;}catch(e){this.error.set(this.message(e));return false;}finally{this.busy.set(false);}}
   private message(error:unknown){return error instanceof Error?error.message:'Please try again.';}
 }

@@ -16,9 +16,11 @@ export function mediaRoutes(c:Context){
   const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:15*1024*1024,files:2,fields:4}});
   /** View-once photos are only handed to the recipient through the chat's one-time open. */
   const viewOnceGuard=async(media:string,viewer:string)=>{const owner=await c.one('SELECT m.user_id FROM messages m JOIN message_view_once v ON v.message_id=m.id WHERE m.media_id=?',media);if(owner&&owner.user_id!==viewer)throw new HttpError(403,'This photo can only be opened once from the chat.');};
-  router.get('/',async(req,res)=>res.json(await c.all(`SELECT ${columns} FROM media LEFT JOIN media_previews mp ON mp.media_id=media.id WHERE media.couple_id=? AND NOT EXISTS(SELECT 1 FROM choice_media cm WHERE cm.media_id=media.id) AND NOT EXISTS(SELECT 1 FROM decision_options o WHERE o.media_id=media.id) AND NOT EXISTS(SELECT 1 FROM messages vm JOIN message_view_once vo ON vo.message_id=vm.id WHERE vm.media_id=media.id) ORDER BY media.created_at DESC LIMIT 200`,req.identity.coupleId)));
+  /** Memories lists only what was added in Memories. Older uploads made before uploads recorded where they came from
+   *  stay in Memories unless a chat message or choice uses them. */
+  router.get('/',async(req,res)=>res.json(await c.all(`SELECT ${columns} FROM media LEFT JOIN media_previews mp ON mp.media_id=media.id WHERE media.couple_id=? AND (EXISTS(SELECT 1 FROM memory_media mm WHERE mm.media_id=media.id) OR (NOT EXISTS(SELECT 1 FROM chat_media ch WHERE ch.media_id=media.id) AND NOT EXISTS(SELECT 1 FROM choice_media cm WHERE cm.media_id=media.id) AND NOT EXISTS(SELECT 1 FROM decision_options o WHERE o.media_id=media.id) AND NOT EXISTS(SELECT 1 FROM messages used WHERE used.media_id=media.id))) ORDER BY media.created_at DESC LIMIT 200`,req.identity.coupleId)));
   router.post('/',upload.fields([{name:'file',maxCount:1},{name:'thumb',maxCount:1}]),async(req,res)=>{
-    if(req.query.purpose!==undefined&&req.query.purpose!=='choice')throw new HttpError(400,'Choose a valid upload destination.');
+    const purpose=req.query.purpose;if(purpose!==undefined&&purpose!=='choice'&&purpose!=='memory'&&purpose!=='chat')throw new HttpError(400,'Choose a valid upload destination.');
     const files=req.files as Record<string,Express.Multer.File[]>|undefined;
     const file=files?.file?.[0];if(!file)throw new HttpError(400,'Choose a photo, audio or video.');
     const type=await fileTypeFromBuffer(file.buffer).catch(()=>undefined);
@@ -39,10 +41,24 @@ export function mediaRoutes(c:Context){
         await c.run('INSERT INTO media VALUES(?,?,?,?,?,?,?)',resource,req.identity.coupleId,req.identity.id,filename,mime,file.size,now());
         if(thumbFilename||duration||width||height)await c.run('INSERT INTO media_previews VALUES(?,?,?,?,?,?)',resource,thumbFilename,thumbFilename?thumbType!.mime:null,duration,width&&Math.round(width),height&&Math.round(height));
         if(waveform)await c.run('INSERT INTO media_waveforms VALUES(?,?)',resource,waveform.join(','));
-        if(req.query.purpose==='choice')await c.run('INSERT INTO choice_media VALUES(?)',resource);
+        if(purpose==='choice')await c.run('INSERT INTO choice_media VALUES(?)',resource);
+        if(purpose==='memory')await c.run('INSERT INTO memory_media VALUES(?)',resource);
+        if(purpose==='chat')await c.run('INSERT INTO chat_media VALUES(?)',resource);
       });
     }catch(e){await Promise.all(written.map(item=>unlink(item).catch(()=>{})));throw e;}
     await c.changed(req.identity.coupleId,'media');res.status(201).json(await c.one(`SELECT ${columns} FROM media LEFT JOIN media_previews mp ON mp.media_id=media.id WHERE media.id=?`,resource));
+  });
+  /** Older media uploaded before thumbnails existed: the first phone to open it full size sends back a small preview for everyone. */
+  router.post('/:id/preview',upload.fields([{name:'thumb',maxCount:1}]),async(req,res)=>{
+    const item=await c.owned('media',String(req.params.id),req);await viewOnceGuard(item.id,req.identity.id);
+    if(item.mime.startsWith('audio/'))throw new HttpError(400,'Voice messages have no picture preview.');
+    if(await c.one('SELECT 1 AS found FROM media_previews WHERE media_id=? AND thumb_filename IS NOT NULL',item.id)){res.json({ok:true});return;}
+    const thumb=(req.files as Record<string,Express.Multer.File[]>|undefined)?.thumb?.[0];const thumbType=thumb&&await fileTypeFromBuffer(thumb.buffer).catch(()=>undefined);
+    if(!thumb||thumb.size>256*1024||!thumbType||!thumbTypes.has(thumbType.mime))throw new HttpError(400,'Choose a valid preview image.');
+    const duration=item.mime.startsWith('video/')?number(req.body?.duration,24*60*60):null;const width=number(req.body?.width,20000),height=number(req.body?.height,20000);
+    const thumbFilename=`${item.id}.thumb.${thumbType.ext}`;await writeFile(resolve(c.uploadDir,thumbFilename),thumb.buffer);
+    await c.run('INSERT INTO media_previews VALUES(?,?,?,?,?,?) ON CONFLICT(media_id) DO UPDATE SET thumb_filename=excluded.thumb_filename,thumb_mime=excluded.thumb_mime,duration=COALESCE(media_previews.duration,excluded.duration),width=COALESCE(media_previews.width,excluded.width),height=COALESCE(media_previews.height,excluded.height)',item.id,thumbFilename,thumbType.mime,duration,width&&Math.round(width),height&&Math.round(height));
+    await c.changed(req.identity.coupleId,'media');res.json({ok:true});
   });
   router.get('/:id/thumb',async(req,res)=>{
     const item=await c.owned('media',String(req.params.id),req);await viewOnceGuard(item.id,req.identity.id);
@@ -54,7 +70,9 @@ export function mediaRoutes(c:Context){
   });
   router.get('/:id',async(req,res)=>{
     const item=await c.owned('media',String(req.params.id),req);await viewOnceGuard(item.id,req.identity.id);
-    res.set({'Cache-Control':'private, no-store','Content-Type':item.mime,'Content-Disposition':'inline'});
+    // An uploaded file never changes, so phones may keep it; view-once photos must never be stored.
+    const once=await c.one('SELECT 1 AS found FROM messages m JOIN message_view_once v ON v.message_id=m.id WHERE m.media_id=?',item.id);
+    res.set({'Cache-Control':once?'private, no-store':'private, max-age=31536000, immutable','Content-Type':item.mime,'Content-Disposition':'inline'});
     res.sendFile(resolve(c.uploadDir,item.filename));
   });return router;
 }
