@@ -12,7 +12,8 @@ async function passwordHash(password:string){const salt=randomBytes(16).toString
 async function matches(password:string,stored:string){const [salt,key]=stored.split(':');if(!salt||!key||key.length!==128)return false;const candidate=await scrypt(password,salt,64) as Buffer;return timingSafeEqual(candidate,Buffer.from(key,'hex'));}
 export function authRoutes(c:Context){
   const router=Router();
-  const limit=rateLimit({windowMs:15*60*1000,limit:40,standardHeaders:'draft-8',legacyHeaders:false,message:{error:'Too many attempts. Try again in 15 minutes.'}});
+  // Brute-force protection per address; the automated test server raises it because every test signs up new couples.
+  const limit=rateLimit({windowMs:15*60*1000,limit:Number(process.env.AUTH_RATE_LIMIT)||40,standardHeaders:'draft-8',legacyHeaders:false,message:{error:'Too many attempts. Try again in 15 minutes.'}});
   async function session(userId:string){const token=randomBytes(32).toString('hex');await c.storage.sessions.create(hash(token),userId,Date.now()+7*86400000);return token;}
   router.post('/register',limit,async(req,res)=>{
     const input=register.parse(req.body);
@@ -48,7 +49,7 @@ export function authRoutes(c:Context){
   return router;
 }
 export function pairRoutes(c:Context){
-  const router=Router();router.use(c.authenticated,rateLimit({windowMs:15*60*1000,limit:30,standardHeaders:'draft-8',legacyHeaders:false,message:{error:'Too many invitation attempts. Try later.'}}));
+  const router=Router();router.use(c.authenticated,rateLimit({windowMs:15*60*1000,limit:Number(process.env.PAIR_RATE_LIMIT)||30,standardHeaders:'draft-8',legacyHeaders:false,message:{error:'Too many invitation attempts. Try later.'}}));
   router.use(async(req,_res,next)=>{if(await c.one('SELECT user_id FROM phone_profiles WHERE user_id=? AND complete=0',req.identity.id))next(new HttpError(400,'Add your name before pairing with your partner.'));else next();});
   router.post('/invite',async(req,res)=>{
     const code=randomBytes(8).toString('hex').toUpperCase();const expiresAt=Date.now()+86400000;

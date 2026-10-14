@@ -11,7 +11,8 @@ export function buildPushMessage(tokens:string[],kind:string,event?:string,call?
   const nativeCall=(kind==='call'||kind==='call_cancel')&&!!call;
   const data={page,kind,...(event?{event}:{}),...(call?{call_id:call.id,call_kind:call.kind,caller_name:call.name,expires_at:String(call.expires)}:{}),...(text?{title,body}:{})};
   // Private visibility lets Android's "hide sensitive content" lock-screen setting redact it too.
-  const androidNotification=nativeCall?undefined:{title,body,visibility:'private' as const,...(tag?{tag}:{})};
+  // Android handles calls and "thinking of you" itself (data-only), so they can ring or pop up even while the app is closed.
+  const androidNotification=nativeCall||kind==='nudge'?undefined:{title,body,visibility:'private' as const,...(tag?{tag}:{})};
   const ttl=kind==='call_cancel'?'30':String(Math.ceil(Math.max(0,(call?.expires||Date.now()+86400000)-Date.now())/1000));
   return {
     tokens,data,

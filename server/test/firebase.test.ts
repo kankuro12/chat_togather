@@ -28,3 +28,9 @@ test('Android incoming calls stay data-only and iOS ordinary events have alerts'
   const message=buildPushMessage(['device'],'message','message-1');
   assert.deepEqual(message.apns?.payload?.aps.alert,{title:'Together',body:'New message from your partner.'});
 });
+
+test('thinking-of-you pushes are data-only on Android so the app can show its own popup',()=>{
+  const message=buildPushMessage(['device'],'nudge','nudge-1',undefined,{title:'Asha',body:'💗 Thinking of you'});
+  assert.equal(message.android?.notification,undefined);assert.equal(message.android?.priority,'high');
+  assert.equal(message.data?.kind,'nudge');assert.equal(message.data?.title,'Asha');assert.equal(message.data?.page,'us');
+});
