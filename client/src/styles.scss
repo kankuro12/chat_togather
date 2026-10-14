@@ -622,3 +622,53 @@ chat-page:has(.choice-list){height:auto;min-height:100%;display:block!important}
   .sidebar nav button.desktop-only{display:none}
   .back-home{display:inline-flex;align-items:center;gap:6px;margin:0 0 var(--space-2xs);padding-inline:0}
 }
+/* Calls: full screen like Messenger, with a small corner window when minimized */
+.call-screen{position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:space-between;gap:16px;padding:max(16px,env(safe-area-inset-top)) 16px max(24px,env(safe-area-inset-bottom));overflow:hidden;color:#fff;background:radial-gradient(circle at 50% 28%,oklch(34% 0.07 15),oklch(14% 0.02 325) 70%)}
+.call-screen .remote-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;z-index:0}
+.call-top{position:relative;z-index:2;width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px}
+.call-top>span{width:44px}
+.call-top-title{display:flex;flex-direction:column;align-items:center;text-shadow:0 1px 3px oklch(0% 0 0 / .6);font-size:13px}.call-top-title strong{font-size:16px}
+.call-identity{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:auto;padding-top:8vh;text-align:center}
+.call-identity h2{color:#fff;font-size:28px;margin:6px 0 0}.call-identity p{margin:0;color:oklch(100% 0 0 / .8)}
+.call-avatar{width:112px;height:112px;border-radius:50%;display:grid;place-items:center;font:600 44px/1 var(--font-display);color:#fff;background:linear-gradient(135deg,oklch(60% 0.21 15),oklch(45% 0.17 330));box-shadow:0 0 0 8px oklch(100% 0 0 / .08)}
+.call-avatar.ringing{animation:call-pulse 1.6s ease-out infinite}
+.call-avatar.small{width:40px;height:40px;font-size:18px;box-shadow:none;flex:none}
+@keyframes call-pulse{0%{box-shadow:0 0 0 0 oklch(100% 0 0 / .35)}100%{box-shadow:0 0 0 30px oklch(100% 0 0 / 0)}}
+.call-screen .self-video{position:absolute;top:calc(72px + env(safe-area-inset-top));right:16px;bottom:auto;width:min(28vw,150px);height:auto;aspect-ratio:3/4;object-fit:cover;border:2px solid oklch(100% 0 0 / .55);border-radius:14px;background:oklch(22% 0.01 325);box-shadow:0 6px 20px oklch(0% 0 0 / .45);z-index:2}
+.call-screen .self-video.off{opacity:.25}
+.call-screen .call-controls{position:relative;z-index:2;display:flex;flex-wrap:nowrap;justify-content:center;gap:clamp(14px,6vw,36px);margin:0;padding:14px 22px;border-radius:999px;background:oklch(0% 0 0 / .3);backdrop-filter:blur(14px)}
+.call-control{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;color:oklch(100% 0 0 / .9)}
+.call-round{width:60px;height:60px;padding:0;border:0;border-radius:50%;display:grid;place-items:center;font-size:26px;color:#fff;cursor:pointer;transition:transform .12s,background-color .12s}
+.call-round:active{transform:scale(.93)}.call-round:disabled{opacity:.5;cursor:default}
+.call-round:focus-visible{outline:3px solid #fff;outline-offset:3px}
+.call-round.glass{background:oklch(100% 0 0 / .18)}.call-round.glass:hover{background:oklch(100% 0 0 / .26)}
+.call-round.glass.on{background:#fff;color:oklch(20% 0.02 325)}
+.call-round.answer{background:oklch(66% 0.17 150)}.call-round.answer:hover{background:oklch(60% 0.17 150)}
+.call-round.decline{background:oklch(58% 0.22 25)}.call-round.decline:hover{background:oklch(52% 0.22 25)}
+.call-round.decline ion-icon{transform:rotate(135deg)}
+.call-round.small{width:44px;height:44px;font-size:20px}.call-round.tiny{width:34px;height:34px;font-size:16px}
+.call-screen:not(.connected) .call-control .answer,.call-screen:not(.connected) .call-control .decline{width:68px;height:68px}
+.call-mini{position:fixed;z-index:1000;display:flex;align-items:center;gap:10px;max-width:calc(100vw - 24px);padding:8px 10px 8px 8px;border-radius:999px;color:#fff;background:oklch(18% 0.02 325 / .94);box-shadow:0 10px 30px oklch(0% 0 0 / .35);touch-action:none;user-select:none;cursor:grab}
+.call-mini[data-corner=br]{right:12px;bottom:calc(80px + env(safe-area-inset-bottom))}.call-mini[data-corner=bl]{left:12px;bottom:calc(80px + env(safe-area-inset-bottom))}
+.call-mini[data-corner=tr]{right:12px;top:calc(64px + env(safe-area-inset-top))}.call-mini[data-corner=tl]{left:12px;top:calc(64px + env(safe-area-inset-top))}
+@media(min-width:601px){.call-mini[data-corner=br],.call-mini[data-corner=bl]{bottom:24px}}
+.call-mini-text{display:flex;flex-direction:column;min-width:0;font-size:12px;font-variant-numeric:tabular-nums}.call-mini-text strong{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.call-mini .decline{position:relative;z-index:1;flex:none}
+.call-mini-open{position:absolute;inset:0;border:0;border-radius:inherit;background:none;pointer-events:none}
+.call-mini-open:focus-visible{outline:3px solid var(--color-focus);outline-offset:2px}
+.call-mini.video-call{flex-direction:column;align-items:stretch;gap:0;width:128px;padding:0;border-radius:16px;overflow:hidden}
+.call-mini.video-call video{display:block;width:128px;height:172px;object-fit:cover;background:#000}
+.call-mini.video-call .call-mini-text{position:absolute;left:8px;right:44px;bottom:8px;text-shadow:0 1px 3px oklch(0% 0 0 / .7)}
+.call-mini.video-call .decline{position:absolute;top:6px;right:6px}
+/* Chat header: green to talk, blue to see each other. */
+.chat-call-actions .icon-button[aria-label="Audio call"]{color:oklch(52% 0.15 150);background:color-mix(in oklch,oklch(60% 0.15 150) 14%,transparent);border-radius:50%}
+.chat-call-actions .icon-button[aria-label="Video call"]{color:oklch(52% 0.15 255);background:color-mix(in oklch,oklch(60% 0.15 255) 14%,transparent);border-radius:50%}
+.chat-call-actions .icon-button[aria-label="Search messages"]{color:var(--color-muted)}
+@media (prefers-color-scheme: dark){
+  .chat-call-actions .icon-button[aria-label="Audio call"]{color:oklch(76% 0.14 150)}
+  .chat-call-actions .icon-button[aria-label="Video call"]{color:oklch(76% 0.12 255)}
+}
+/* Android system picture-in-picture window: just the partner, no controls. */
+.pip-mode .call-top,.pip-mode .call-controls,.pip-mode .call-screen .self-video{display:none}
+.pip-mode .call-screen{padding:0;justify-content:center}
+.pip-mode .call-identity{padding:0;margin:auto;gap:4px}.pip-mode .call-avatar{width:64px;height:64px;font-size:26px}.pip-mode .call-identity h2{font-size:15px}.pip-mode .call-identity p{font-size:12px}

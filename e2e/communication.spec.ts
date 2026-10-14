@@ -12,8 +12,22 @@ test('real paired calls, recording messages, location, compact images and BS dat
     await a.getByRole('button',{name:'Create invitation',exact:true}).click();const code=await a.getByTestId('invite-code').innerText();await b.getByRole('button',{name:'Join',exact:true}).click();await b.getByLabel('Partner invitation code').fill(code);await b.getByRole('button',{name:'Join your partner'}).click();
     for(const page of [a,b]){await expect(page.getByRole('heading',{name:'Home',exact:true})).toBeVisible();await page.getByRole('button',{name:'Chat',exact:true}).click();}
     for(const kind of ['Audio','Video']){
-      await a.getByRole('button',{name:kind+' call',exact:true}).click();await expect(b.getByText('Incoming '+kind.toLowerCase()+' call',{exact:true})).toBeVisible();await b.getByRole('button',{name:'Answer',exact:true}).click();
+      await a.getByRole('button',{name:kind+' call',exact:true}).click();await expect(b.getByText('Incoming '+kind.toLowerCase()+' call',{exact:true})).toBeVisible();
+      // Incoming call: green Answer, red Decline, clearly apart.
+      const colour=(page:typeof a,name:string)=>page.getByRole('button',{name,exact:true}).evaluate(el=>getComputedStyle(el).backgroundColor);
+      const [answer,decline]=[await colour(b,'Answer'),await colour(b,'Decline')];expect(answer).not.toBe(decline);
+      expect(await b.getByRole('button',{name:'Answer',exact:true}).evaluate(el=>el.classList.contains('answer'))).toBe(true);expect(await b.getByRole('button',{name:'Decline',exact:true}).evaluate(el=>el.classList.contains('decline'))).toBe(true);
+      await b.getByRole('button',{name:'Answer',exact:true}).click();
       await expect(a.getByRole('dialog',{name:'Partner call'}).getByRole('status')).toHaveText(kind+' call',{timeout:20000});await expect(b.getByRole('dialog',{name:'Partner call'}).getByRole('status')).toHaveText(kind+' call');
+      // Full screen while talking; minimize to a corner window and keep using the chat; tap it to go back.
+      const screen=a.getByRole('dialog',{name:'Partner call'}),mini=a.getByRole('dialog',{name:'Call in progress'});const view=a.viewportSize()!;const full=(await screen.boundingBox())!;expect(Math.round(full.width)).toBe(view.width);expect(Math.round(full.height)).toBe(view.height);
+      await a.screenshot({path:`artifacts/call-${kind.toLowerCase()}-full.png`});
+      await a.getByRole('button',{name:'Minimize call'}).click();await expect(screen).toHaveCount(0);await expect(mini).toBeVisible();await expect(a.getByLabel('Message your partner')).toBeVisible();
+      await expect(mini).toContainText(/\d:\d\d/);await a.screenshot({path:`artifacts/call-${kind.toLowerCase()}-mini.png`});
+      const corner=(await mini.boundingBox())!;expect(corner.width).toBeLessThan(view.width/2);
+      await mini.click({position:{x:12,y:12}});await expect(screen).toBeVisible();
+      // The back gesture shrinks the call instead of leaving the page.
+      await a.goBack();await expect(mini).toBeVisible();await mini.click({position:{x:12,y:12}});await expect(screen).toBeVisible();
       if(kind==='Video'){const self=a.getByLabel('Your video');await expect(self).toHaveClass(/mirrored/);const before=await self.evaluate((v:HTMLVideoElement)=>(v.srcObject as MediaStream).getVideoTracks()[0].id);
         await a.getByRole('button',{name:'Switch camera',exact:true}).click();await expect(a.getByRole('button',{name:'Switch camera',exact:true})).toBeEnabled();
         await expect.poll(()=>self.evaluate((v:HTMLVideoElement)=>{const t=(v.srcObject as MediaStream).getVideoTracks()[0];return t.readyState==='live'?t.id:'';})).not.toBe(before);
