@@ -53,7 +53,8 @@ export class Api {
     const data=await response.json().catch(()=>({error:'Together is unavailable right now. Please try again.'}));
     if(!response.ok){if(response.status===401&&token&&path!=='/auth/login'){if(token!==this.token)throw new Error('');this.forget();this.error.set('You’re signed out. Sign in to continue.');throw new Error('You’re signed out. Sign in to continue.');}throw new Error(data.error||'Request failed.');}return data;
   }
-  async me(){const token=this.token;let me:{user:User;pair:Pair|null};try{me=await this.request('/auth/me');}catch(error){if(token!==this.token)return;throw error;}if(token!==this.token)return;this.user.set(me.user);const previous=this.pair()?.id;this.pair.set(me.pair);if(me.pair&&previous!==me.pair.id){await this.reload();this.connect();}}
+  async me(){const token=this.token;let me:{user:User;pair:Pair|null};try{me=await this.request('/auth/me');}catch(error){if(token!==this.token)return;throw error;}if(token!==this.token)return;this.user.set(me.user);const previous=this.pair()?.id;this.pair.set(me.pair);// Connect first: an incoming call answered from a notification needs the live connection, not the full data load.
+    if(me.pair&&previous!==me.pair.id){this.connect();await this.reload();}}
   async acceptSession(session:{token:string}){this.token=session.token;localStorage.setItem('together.session',this.token);await this.me();}
   async authenticate(mode:'register'|'login',input:unknown){await this.acceptSession(await this.request('/auth/'+mode,input));}
   async social(provider:'google'|'facebook'){

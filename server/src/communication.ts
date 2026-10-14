@@ -15,6 +15,17 @@ export function communication(c:Context,options:CommunicationOptions={}){
     return live;
   }
   const notify=notifier(c.db,c.storage.sessions,queue);
+  /** Incoming calls go straight to Firebase from here instead of waiting for the background worker,
+   *  so the partner's phone rings within a second or two. The worker queue is the fallback if that fails. */
+  async function ring(couple:string,callee:string,caller:string,call:{id:string;expires:number;name:string;kind:string}){
+    if(options.sendPush){
+      try{
+        const tokens=(await liveTokens('SELECT token,session_hash,user_id FROM push_tokens WHERE user_id=?',callee)).map(row=>row.token as string);
+        if(tokens.length){const invalid=await options.sendPush(tokens,'call',call.id,call);for(const token of invalid)await c.run('DELETE FROM push_tokens WHERE token=?',token);return;}
+      }catch{/* fall back to the queue below */}
+    }
+    await notify(couple,caller,'call',call.id);
+  }
   const router=Router();router.use(c.authenticated,c.paired);
   router.get('/config',(_req,res)=>res.json({firebase:options.firebase||null,vapidKey:options.vapidKey||'',notifications:!!options.sendPush,iceServers:options.iceServers||[{urls:'stun:stun.l.google.com:19302'}]}));
   router.get('/calls/incoming',async(req,res)=>res.json(await c.all("SELECT i.id,i.kind,u.name,i.expires_at FROM incoming_calls i JOIN users u ON u.id=i.caller_id WHERE i.callee_id=? AND i.couple_id=? AND i.state='ringing' AND i.expires_at>?",req.identity.id,req.identity.coupleId,Date.now())));
@@ -46,7 +57,7 @@ export function communication(c:Context,options:CommunicationOptions={}){
       if(calls.has(user.coupleId))throw new HttpError(409,'A call is already in progress.');
       const call:{id:string;kind:'audio'|'video';caller:Socket;timer:ReturnType<typeof setTimeout>;ready?:Promise<void>}={id:id(),kind,caller:socket,timer:setTimeout(()=>reportEnd(end(user.coupleId,'No answer')),45000)};call.timer.unref();calls.set(user.coupleId,call);call.ready=Promise.resolve(c.run('INSERT INTO incoming_calls VALUES(?,?,?,?,?,?,?)',call.id,user.coupleId,user.id,recipient.user_id,kind,'ringing',Date.now()+45000) as any);try{await call.ready;}catch(error){clearTimeout(call.timer);calls.delete(user.coupleId);throw error;}
       if(calls.get(user.coupleId)!==call||!socket.connected){if(calls.get(user.coupleId)===call)await end(user.coupleId,'Disconnected');throw new HttpError(409,'Call ended.');}
-      for(const partner of partners)partner.emit('call:incoming',{id:call.id,kind,name:user.name});await notify(user.coupleId,user.id,'call',call.id);return {id:call.id};
+      for(const partner of partners)partner.emit('call:incoming',{id:call.id,kind,name:user.name});await ring(user.coupleId,recipient.user_id,user.id,{id:call.id,expires:Date.now()+45000,name:user.name,kind});return {id:call.id};
     });
     on('call:accept',async data=>{const call=current(data);if(call.caller.data.user.id===user.id||call.callee)throw new HttpError(409,'Call unavailable.');call.callee=socket;if(call.ready)await call.ready;if(calls.get(user.coupleId)!==call||!socket.connected||call.callee!==socket)throw new HttpError(409,'Call ended.');clearTimeout(call.timer);await c.run("UPDATE incoming_calls SET state='accepted' WHERE id=?",call.id);await notify(user.coupleId,call.caller.data.user.id,'call_cancel',call.id);call.caller.emit('call:accepted',{id:call.id});socket.to(room).emit('call:claimed',{id:call.id});return {};});
     on('call:signal',async data=>{const call=current(data);if(!call.callee||(socket!==call.caller&&socket!==call.callee))throw new HttpError(403,'Call unavailable.');
