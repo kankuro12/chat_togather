@@ -3,30 +3,39 @@ import { FormsModule } from '@angular/forms';
 import { IonIcon } from '@ionic/angular/standalone';
 import { Api } from './api';
 import { CalendarDate } from './calendar';
+import { UsMood } from './us-mood';
+import { UsTogether } from './us-together';
+import { UsPlay } from './us-play';
+import { UsJournal } from './us-journal';
 import { localDay, dayNumber, nextOccurrence, together } from './us-dates';
 import { SpecialDate, SharedList, Wish, DailyQuestion, QuestionHistory, LoveNote, Nudge } from './models';
 
 const KIND_ICON:Record<string,string>={together:'💞',anniversary:'💍',birthday:'🎂',other:'⭐'};
 
-@Component({selector:'us-page',standalone:true,imports:[FormsModule,IonIcon,CalendarDate],template:`
+@Component({selector:'us-page',standalone:true,imports:[FormsModule,IonIcon,CalendarDate,UsMood,UsTogether,UsPlay,UsJournal],template:`
 <div class="page-heading us-heading"><div><h1>Us</h1><p>@if(togetherFor()){Together for {{togetherFor()}}}@else{Your little corner, just for two}</p></div><button class="primary nudge-button" type="button" (click)="nudge()" [disabled]="nudging()"><span aria-hidden="true">💗</span>{{nudged()?'Sent!':'Thinking of you'}}</button></div>
 @if(lastNudge();as last){<p class="nudge-note" role="status">💗 {{last.name}} thought of you {{ago(last.created_at)}}</p>}
-<div class="us-grid">
+<div class="segmented us-sections" role="tablist" aria-label="Us sections">@for(item of tabs;track item.id){<button type="button" role="tab" [class.active]="tab()===item.id" [attr.aria-selected]="tab()===item.id" (click)="setTab(item.id)">{{item.label}}</button>}</div>
+@switch(tab()){
+@case('today'){<div class="us-grid">
   <section class="card us-card us-question" aria-labelledby="question-title">
-    <div class="us-card-heading"><h2 id="question-title">Today’s question</h2><button class="text-button" type="button" (click)="toggleHistory()" [attr.aria-expanded]="showHistory()">{{showHistory()?'Hide past answers':'Past answers'}}</button></div>
+    <div class="us-card-heading"><h2 id="question-title">Today’s question</h2>@if(streak()){<span class="score-pill" title="Days in a row you both answered">🔥 {{streak()}}</span>}<button class="text-button" type="button" (click)="toggleHistory()" [attr.aria-expanded]="showHistory()">{{showHistory()?'Hide past answers':'Past answers'}}</button></div>
     @if(question();as q){<p class="question-text">{{q.question}}</p>
       @if(q.mine===null||editingAnswer()){<form class="answer-form" (ngSubmit)="answer()"><textarea name="answer" [(ngModel)]="answerText" aria-label="Your answer" maxlength="1000" rows="3" placeholder="Your answer…"></textarea><div class="us-actions">@if(q.partner_answered&&q.mine===null){<span class="fineprint">{{partnerName()}} answered. Share yours to see it.</span>}<button class="primary" type="submit" [disabled]="!answerText.trim()||busy()">Share answer</button></div></form>}
       @else{<div class="answers"><div class="answer mine"><strong>You</strong><p>{{q.mine}}</p><button class="text-button" type="button" (click)="editAnswer()">Edit</button></div><div class="answer"><strong>{{partnerName()}}</strong><p>{{q.partner??'Not answered yet'}}</p></div></div>}}
     @else{<p class="fineprint" role="status">Loading…</p>}
     @if(showHistory()){<div class="question-history">@for(past of history();track past.day){<details><summary><span>{{past.day|calendarDate:'MMM d'}}</span>{{past.question}}</summary>@for(answer of past.answers;track answer.user_id){<p><strong>{{answer.user_id===api.user()?.id?'You':answer.name}}:</strong> {{answer.answer}}</p>}</details>}@empty{<p class="fineprint">Answers you both share appear here.</p>}</div>}
   </section>
-
+  <us-mood></us-mood>
+  <us-together></us-together>
+</div>}
+@case('play'){<div class="us-grid"><us-play></us-play></div>}
+@case('plans'){<div class="us-grid">
   <section class="card us-card" aria-labelledby="dates-title">
     <div class="us-card-heading"><h2 id="dates-title">Special dates</h2><button class="icon-button" type="button" aria-label="Add special date" title="Add special date" (click)="openDate()"><ion-icon name="add-outline"></ion-icon></button></div>
     @for(item of upcoming();track item.date.id){<div class="special-date"><span class="date-icon" aria-hidden="true">{{icon(item.date.kind)}}</span><div><strong>{{item.date.title}}</strong><small>{{item.date.date|calendarDate:'MMM d, y'}}@if(item.years>0){ · {{item.years}} {{item.years===1?'year':'years'}}}</small></div><span class="countdown" [class.today]="item.days===0">{{countdown(item.days)}}</span><button class="icon-button" type="button" [attr.aria-label]="'Edit '+item.date.title" (click)="openDate(item.date)"><ion-icon name="create-outline"></ion-icon></button></div>}
     @empty{<p class="fineprint">Add when you got together, birthdays and anniversaries. You both get a reminder on the day.</p>}
   </section>
-
   <section class="card us-card" aria-labelledby="lists-title">
     <div class="us-card-heading"><h2 id="lists-title">Lists</h2><button class="icon-button" type="button" aria-label="New list" title="New list" (click)="creatingList.set(!creatingList())" [attr.aria-expanded]="creatingList()"><ion-icon name="add-outline"></ion-icon></button></div>
     @if(creatingList()){<form class="inline-add" (ngSubmit)="newList(listTitle)"><input name="listTitle" [(ngModel)]="listTitle" aria-label="List name" placeholder="List name, e.g. Weekend to-do" maxlength="60" autocomplete="off"><button class="secondary" type="submit" [disabled]="!listTitle.trim()">Create</button></form>}
@@ -37,7 +46,6 @@ const KIND_ICON:Record<string,string>={together:'💞',anniversary:'💍',birthd
       <div class="us-actions">@if(doneCount(list)){<button class="text-button" type="button" (click)="clearDone(list)">Clear {{doneCount(list)}} done</button>}<button class="text-button danger" type="button" (click)="deleteList(list)">{{confirmList()===list.id?'Tap again to delete list':'Delete list'}}</button></div>}
     @else{<p class="fineprint">Groceries, chores, things to do this weekend: one list you both can tick off.</p>}
   </section>
-
   <section class="card us-card" aria-labelledby="wishes-title">
     <div class="us-card-heading"><h2 id="wishes-title">Wishlist</h2></div>
     <div class="segmented list-tabs us-tabs" role="tablist"><button type="button" role="tab" [class.active]="wishTab()==='mine'" [attr.aria-selected]="wishTab()==='mine'" (click)="wishTab.set('mine')">Your wishes</button><button type="button" role="tab" [class.active]="wishTab()==='theirs'" [attr.aria-selected]="wishTab()==='theirs'" (click)="wishTab.set('theirs')">{{partnerName()}}’s</button></div>
@@ -46,13 +54,16 @@ const KIND_ICON:Record<string,string>={together:'💞',anniversary:'💍',birthd
       <ul class="wish-list">@for(wish of myWishes();track wish.id){<li><div><strong>{{wish.title}}</strong>@if(wish.link){<a [href]="wish.link" target="_blank" rel="noopener noreferrer">{{host(wish.link)}}</a>}</div><button class="icon-button" type="button" [attr.aria-label]="'Remove '+wish.title" (click)="removeWish(wish.id)"><ion-icon name="trash-outline"></ion-icon></button></li>}@empty{<li class="fineprint">{{partnerName()}} can secretly mark what they’ll get you. You’ll never see it.</li>}</ul>}
     @else{<ul class="wish-list">@for(wish of theirWishes();track wish.id){<li [class.claimed]="wish.claimed"><div><strong>{{wish.title}}</strong>@if(wish.link){<a [href]="wish.link" target="_blank" rel="noopener noreferrer">{{host(wish.link)}}</a>}@if(wish.claimed){<small>{{wish.claimed_by_me?'You’re getting this 🤫':'Someone is getting this'}}</small>}</div><button class="secondary" type="button" [attr.aria-pressed]="!!wish.claimed_by_me" (click)="claim(wish)" [disabled]="wish.claimed&&!wish.claimed_by_me">{{wish.claimed_by_me?'Undo':'I’ll get this'}}</button></li>}@empty{<li class="fineprint">{{partnerName()}} hasn’t added any wishes yet.</li>}</ul>}
   </section>
-
+</div>}
+@case('notes'){<div class="us-grid">
   <section class="card us-card us-notes" aria-labelledby="notes-title">
     <div class="us-card-heading"><h2 id="notes-title">Love notes</h2></div>
     <form class="note-form" (ngSubmit)="sendNote()"><textarea name="note" [(ngModel)]="noteText" aria-label="Love note" rows="3" maxlength="4000" placeholder="Write something to open later…"></textarea><label>Opens on<input name="unlock" type="datetime-local" [(ngModel)]="noteUnlock" [min]="minUnlock"></label><button class="primary" type="submit" [disabled]="!noteText.trim()||!noteUnlock||busy()">Seal note</button></form>
     <ul class="note-list">@for(note of notes();track note.id){<li [class.sealed]="note.locked&&!mine(note)"><span class="note-icon" aria-hidden="true">{{note.locked?'💌':'💖'}}</span><div>@if(mine(note)){<strong>To {{partnerName()}} · {{note.locked?'opens '+(note.unlock_at|calendarDate:'MMM d, y'):'opened'}}</strong><p>{{note.text}}</p>}@else if(note.locked){<strong>Sealed note from {{note.author_name}}</strong><p class="fineprint">Opens {{note.unlock_at|calendarDate:'MMM d, y'}} · {{countdown(daysUntil(note.unlock_at))}}</p>}@else{<strong>From {{note.author_name}}</strong><p>{{note.text}}</p>}</div>@if(mine(note)){<button class="icon-button" type="button" aria-label="Delete note" (click)="deleteNote(note.id)"><ion-icon name="trash-outline"></ion-icon></button>}</li>}@empty{<li class="fineprint">Seal a note for a birthday, an anniversary or a hard day ahead. It stays hidden until then.</li>}</ul>
   </section>
-</div>
+  <us-journal></us-journal>
+</div>}
+}
 
 <dialog #dateDialog class="modal" aria-labelledby="date-title"><form (ngSubmit)="saveDate()"><div class="modal-heading"><h2 id="date-title">{{editingDate()?'Edit date':'New special date'}}</h2><button type="button" class="icon-button" aria-label="Close" (click)="dateDialog.close()"><ion-icon name="close-outline"></ion-icon></button></div>
   <label>What is it?<select name="kind" [(ngModel)]="dateKind"><option value="together">When we got together</option><option value="anniversary">Anniversary</option><option value="birthday">Birthday</option><option value="other">Something else</option></select></label>
@@ -63,6 +74,10 @@ const KIND_ICON:Record<string,string>={together:'💞',anniversary:'💍',birthd
 `})
 export class UsPage {
   api=inject(Api);busy=signal(false);
+  tabs=[{id:'today',label:'Today'},{id:'play',label:'Play'},{id:'plans',label:'Plans'},{id:'notes',label:'Notes'}];
+  tab=signal(((()=>{try{return localStorage.getItem('together.usTab');}catch{return null;}})())||'today');
+  setTab(id:string){this.tab.set(id);try{localStorage.setItem('together.usTab',id);}catch{/* storage blocked */}}
+  streak=signal(0);
   partnerName=computed(()=>this.api.partner()?.name||'Your partner');
   dates=signal<SpecialDate[]>([]);lists=signal<SharedList[]>([]);wishes=signal<Wish[]>([]);question=signal<DailyQuestion|null>(null);history=signal<QuestionHistory[]>([]);notes=signal<LoveNote[]>([]);nudges=signal<Nudge[]>([]);
   today=signal(localDay());
@@ -78,6 +93,7 @@ export class UsPage {
     try{
       const [dates,lists,wishes,question,notes,nudges]=await Promise.all([this.api.request<SpecialDate[]>('/us/dates'),this.api.request<SharedList[]>('/us/lists'),this.api.request<Wish[]>('/us/wishes'),this.api.request<DailyQuestion>('/us/question?day='+day),this.api.request<LoveNote[]>('/us/notes'),this.api.request<Nudge[]>('/us/nudges')]);
       if(token!==this.api.token)return;
+      void this.api.request<{streak:number}>('/us/streak?day='+day).then(result=>{if(token===this.api.token)this.streak.set(result.streak);}).catch(()=>{});
       this.dates.set(dates);this.lists.set(lists);this.wishes.set(wishes);this.question.set(question);this.notes.set(notes);this.nudges.set(nudges);
       if(this.showHistory())this.history.set(await this.api.request<QuestionHistory[]>('/us/question/history'));
     }catch(error){this.api.error.set((error as Error).message);}

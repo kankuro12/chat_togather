@@ -5,14 +5,14 @@ import type {PushText} from './push-text.js';
 type PushCall={id:string;expires:number;name:string;kind:string};
 
 export function buildPushMessage(tokens:string[],kind:string,event?:string,call?:PushCall,text?:PushText):MulticastMessage{
-  const page=kind==='choice'?'choices':['nudge','question','note','date'].includes(kind)?'us':'chat';
+  const page=kind==='choice'?'choices':kind==='play'?'games':['nudge','question','note','date','moment','game','gratitude'].includes(kind)?'us':'chat';
   const title=text?.title||'Together';const body=text?.body||(kind==='choice'?'New choice from your partner.':'New message from your partner.');
   const tag=event?(kind==='choice'?'choice:'+event:event):undefined;
   const nativeCall=(kind==='call'||kind==='call_cancel')&&!!call;
   const data={page,kind,...(event?{event}:{}),...(call?{call_id:call.id,call_kind:call.kind,caller_name:call.name,expires_at:String(call.expires)}:{}),...(text?{title,body}:{})};
   // Private visibility lets Android's "hide sensitive content" lock-screen setting redact it too.
   // Android handles calls and "thinking of you" itself (data-only), so they can ring or pop up even while the app is closed.
-  const androidNotification=nativeCall||kind==='nudge'?undefined:{title,body,visibility:'private' as const,...(tag?{tag}:{})};
+  const androidNotification=nativeCall||kind==='nudge'||kind==='moment'?undefined:{title,body,visibility:'private' as const,...(tag?{tag}:{})};
   const ttl=kind==='call_cancel'?'30':String(Math.ceil(Math.max(0,(call?.expires||Date.now()+86400000)-Date.now())/1000));
   return {
     tokens,data,

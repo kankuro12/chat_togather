@@ -12,6 +12,8 @@ import { authRoutes, pairRoutes } from './auth.js';
 import { chatRoutes, realtime } from './chat.js';
 import { mediaRoutes } from './media.js';
 import { usRoutes } from './us.js';
+import { connectRoutes } from './connect.js';
+import { gamesRoutes } from './games.js';
 import { decisionsRoutes } from './decisions.js';
 import { plansRoutes } from './plans.js';
 import { tripsRoutes } from './trips.js';
@@ -38,7 +40,7 @@ export async function createApp(options: {databasePath?:string;database?:Databas
     catch{return ipKeyGenerator(req.ip||'unknown');}
   },message:{error:'Too many requests. Try again shortly.'}}));
   app.use('/api/communication',comm.router);app.use('/api/notifications',comm.notifications);
-  app.use('/api/messages',chatRoutes(c,comm.notify));app.use('/api/media',mediaRoutes(c));app.use('/api/decisions',decisionsRoutes(c,comm.notify));app.use('/api/plans',plansRoutes(c));app.use('/api/trips',tripsRoutes(c));app.use('/api/us',usRoutes(c,comm.notify));
+  app.use('/api/messages',chatRoutes(c,comm.notify));app.use('/api/media',mediaRoutes(c));app.use('/api/decisions',decisionsRoutes(c,comm.notify));app.use('/api/plans',plansRoutes(c));app.use('/api/trips',tripsRoutes(c));app.use('/api/us',usRoutes(c,comm.notify));app.use('/api/us',connectRoutes(c,comm.notify));app.use('/api/games',gamesRoutes(c,comm.notify));
   realtime(c,comm.bind);
   app.use('/api',(_req,res)=>res.status(404).json({error:'Endpoint not found.'}));
   // Shares only reach the server when the web app's service worker is not installed yet; open the app anyway.

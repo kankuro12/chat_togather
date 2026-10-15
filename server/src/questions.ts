@@ -61,3 +61,51 @@ export const QUESTIONS=[
   'What is one thing you want to celebrate this month?',
   'What does a good day together look like to you?',
 ];
+
+/** Themed question packs, answered one at a time; each answer is revealed once both of you have answered. */
+export const PACKS:Record<string,{title:string;questions:string[]}>={
+  deep:{title:'Deep talk',questions:[
+    'What is something you have never told anyone but would like to tell me?','When did you feel most understood by me?','What does a safe relationship feel like to you?',
+    'What is a fear you carry about the future?','Which moment changed how you see life?','What do you need from me when you are sad?','What is one belief of yours that has changed since we met?',
+    'How do you want to grow in the next year?','What part of your childhood still shapes you?','What does love mean to you, in one sentence?','When do you feel most like yourself?',
+    'What is the hardest thing you have forgiven?','What would you like us to do better as a team?','What makes you feel respected?','What is a dream you have quietly given up on?']},
+  fun:{title:'Just for fun',questions:[
+    'If we had a theme song, what would it be?','Which animal are we as a couple?','What is the weirdest food you would try with me?','If we won a lottery tomorrow, what would we do first?',
+    'Who would play us in a movie?','What is your most useless talent?','Which cartoon character am I most like?','What would our reality show be called?','What is the funniest thing I have ever done?',
+    'If you could swap lives with me for a day, what would you do?','Pick a superpower for each of us.','What is your go-to karaoke song?','Beach, mountains or city for a surprise weekend?',
+    'What would you name our pet goat?','Which festival food could you eat every day?']},
+  future:{title:'Our future',questions:[
+    'Where would you like us to live in ten years?','What does a perfect ordinary weekday look like for us in the future?','Which tradition do you want us to pass on?',
+    'What is one big trip we must take together?','How do you picture us when we are old?','What would you like our home to feel like?','What is a skill you want us to learn together?',
+    'How should we celebrate our next anniversary?','What is one goal we should save money for?','Which habits do you want us to keep forever?','What does success look like for us?',
+    'What adventure should we have before we turn 40?','How do you want to spend festivals in the future?','What would you like to learn from my family?','What promise should we make for the next year?']},
+  intimate:{title:'Close to you',questions:[
+    'What makes you feel most loved by me?','Which small touch of mine do you love?','What is your favourite memory of us being close?','When do you find me most attractive?',
+    'What is something new you would like us to try?','What kind of affection do you want more of?','What does a perfect cosy evening with me look like?','Which outfit of mine is your favourite?',
+    'What is the most romantic moment we have shared?','How can I make you feel wanted on a busy day?','What do you love about our kisses?','What is a compliment you would love to hear more?',
+    'When do you feel closest to me physically?','Which song puts you in the mood for romance?','What is one thing you would love me to whisper to you?']},
+};
+
+/** "How well do you know me?": you answer about yourself, your partner guesses. */
+export const KNOW_QUESTIONS:{question:string;options:[string,string,string,string]}[]=[
+  {question:'My ideal Saturday morning is…',options:['Sleeping in','A long walk','Cooking breakfast','Scrolling on my phone']},
+  {question:'My favourite kind of food is…',options:['Momo','Dal bhat','Pizza','Something sweet']},
+  {question:'When I am stressed I want…',options:['A hug','Space for a while','To talk it out','A distraction']},
+  {question:'My dream holiday is…',options:['Beach','Mountains','A big city','Somewhere quiet at home']},
+  {question:'The gift I would love most is…',options:['Something handmade','Flowers','An experience together','Something practical']},
+  {question:'In a movie night I pick…',options:['Comedy','Romance','Thriller','Animation']},
+  {question:'My love language is mostly…',options:['Words','Time together','Touch','Help and gifts']},
+  {question:'I am secretly afraid of…',options:['Heights','The dark','Insects','Being alone']},
+  {question:'My favourite season is…',options:['Spring','Summer','Autumn','Winter']},
+  {question:'On a free evening I would rather…',options:['Go out','Stay in','Call friends','Do a hobby']},
+  {question:'My comfort drink is…',options:['Tea','Coffee','Juice','Something cold']},
+  {question:'I feel most proud when…',options:['I finish hard work','I help someone','I learn something','You praise me']},
+  {question:'My morning mood is…',options:['Bright and happy','Slow to start','Grumpy until tea','Depends on the day']},
+  {question:'I would rather receive…',options:['A long letter','A surprise visit','A voice note','A planned date']},
+  {question:'My favourite festival is…',options:['Dashain','Tihar','Holi','Teej']},
+  {question:'When we argue I usually…',options:['Need time first','Want to fix it now','Go quiet','Make a joke']},
+  {question:'My hidden talent is…',options:['Cooking','Singing','Drawing','Making people laugh']},
+  {question:'I spend too much on…',options:['Food','Clothes','Gadgets','Gifts for others']},
+  {question:'My perfect date is…',options:['Dinner out','A picnic','A long drive','Cooking at home']},
+  {question:'I would most like to learn…',options:['A language','An instrument','To dance','To cook a new cuisine']},
+];

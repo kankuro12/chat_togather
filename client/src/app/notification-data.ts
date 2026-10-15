@@ -4,8 +4,8 @@ export function isChoiceNotification(notification:{tag?:string;data?:unknown}):b
   return notification.tag?.startsWith('choice:')===true||data?.page==='choices'||data?.kind==='choice'||payload?.page==='choices'||payload?.kind==='choice';
 }
 
-export type NoticePage='chat'|'choices'|'us';
-export function notificationPage(data:{page?:string;kind?:string}):NoticePage{return data.page==='choices'||data.kind==='choice'?'choices':data.page==='us'?'us':'chat';}
+export type NoticePage='chat'|'choices'|'us'|'games';
+export function notificationPage(data:{page?:string;kind?:string}):NoticePage{return data.page==='choices'||data.kind==='choice'?'choices':data.page==='us'?'us':data.page==='games'?'games':'chat';}
 
 export function isCallNotification(notification:{tag?:string;data?:unknown}):boolean{
   const data=notification.data as {kind?:string;FCM_MSG?:{data?:{kind?:string}}}|undefined;

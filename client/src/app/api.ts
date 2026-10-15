@@ -97,8 +97,10 @@ export class Api {
     this.socket.on('connect',()=>{this.connected.set(true);this.socket?.emit('chat:view',this.chatReading());void this.reload().catch(e=>this.error.set(this.message(e)));});
     this.socket.on('disconnect',(reason:string)=>{this.connected.set(false);this.online.set([]);if(reason==='io server disconnect')void this.me().catch(e=>this.error.set(this.message(e)));});
     this.socket.on('connect_error',()=>this.connected.set(false));
-    this.socket.on('changed',(event:{area:string})=>{if(event.area==='us'){this.usVersion.update(v=>v+1);return;}void (event.area==='read-state'?this.readState():this.reload(event.area)).catch(e=>this.error.set(this.message(e)));});
+    this.socket.on('changed',(event:{area:string})=>{if(event.area==='us'){this.usVersion.update(v=>v+1);return;}if(event.area==='games'){this.gamesVersion.update(v=>v+1);return;}void (event.area==='read-state'?this.readState():this.reload(event.area)).catch(e=>this.error.set(this.message(e)));});
     this.socket.on('nudge',(event:{name:string})=>this.nudged.set({name:event.name,at:Date.now()}));
+    this.socket.on('touch',(event:{active:boolean})=>this.partnerTouching.set(event.active));
+    this.socket.on('disconnect',()=>this.partnerTouching.set(false));
     this.socket.on('message:updated',(event:{id:string})=>{void this.refreshMessage(event.id).catch(()=>{});});
     this.socket.on('presence',(users:string[])=>this.online.set(users));
     this.socket.on('typing',(event:{name:string;active:boolean})=>{this.typing.set(event.active?`${event.name} is typing…`:'');clearTimeout(this.typingTimer);this.typingTimer=setTimeout(()=>this.typing.set(''),3500);});
@@ -107,6 +109,9 @@ export class Api {
   patched=signal<Message|null>(null);pinsVersion=signal(0);
   /** Bumped when the partner changes anything on the Us tab. */
   usVersion=signal(0);nudged=signal<{name:string;at:number}|null>(null);
+  /** Games changed on the partner's side; and whether the partner is holding the touch heart right now. */
+  gamesVersion=signal(0);partnerTouching=signal(false);
+  sendTouch(active:boolean){this.socket?.emit('touch',active);}
   async refreshMessage(id:string){const token=this.token;const row=await this.request<Message>('/messages/'+id);if(token===this.token)this.applyMessage(row);}
   applyMessage(row:Message){this.messages.update(list=>list.some(m=>m.id===row.id)?list.map(m=>m.id===row.id?row:m):list);this.patched.set(row);this.pinsVersion.update(v=>v+1);}
   async react(id:string,emoji:string|null){this.applyMessage(await this.request<Message>(`/messages/${id}/reaction`,{emoji},'PUT'));}

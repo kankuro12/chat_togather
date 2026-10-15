@@ -52,7 +52,8 @@ export class ShareSheet {
   }
   private release(){for(const item of this.previews())URL.revokeObjectURL(item.url);this.previews.set([]);}
   closed(){this.release();this.share.done();}
-  private finish(page:string){this.sheet.nativeElement.close();this.navigate.emit(page);}
+  /** `usTab` opens the Us page on the tab where the shared item landed (wishes and lists live under Plans). */
+  private finish(page:string,usTab?:string){if(usTab){try{localStorage.setItem('together.usTab',usTab);}catch{/* storage blocked */}}this.sheet.nativeElement.close();this.navigate.emit(page);}
   /** Each file becomes its own message; the note and any shared text ride along with the first one. */
   sendToChat(){
     const content=this.share.incoming();if(!content)return;const caption=[this.message.trim(),content.text].filter(Boolean).join('\n');const files=this.sendable();
@@ -67,13 +68,13 @@ export class ShareSheet {
   async addWish(){
     const text=this.share.incoming()?.text||'';const link=text.match(URL_PATTERN)?.[0]||'';
     const title=(this.message.trim()||text.replace(URL_PATTERN,'').split('\n').map(line=>line.trim()).find(Boolean)||(link?new URL(link).hostname.replace(/^www\./,''):'Shared wish')).slice(0,160);
-    this.busy.set(true);try{await this.api.request('/us/wishes',{title,link:link.slice(0,500)});this.finish('us');}catch(error){this.api.error.set((error as Error).message);}finally{this.busy.set(false);}
+    this.busy.set(true);try{await this.api.request('/us/wishes',{title,link:link.slice(0,500)});this.finish('us','plans');}catch(error){this.api.error.set((error as Error).message);}finally{this.busy.set(false);}
   }
   async pickList(){this.busy.set(true);try{this.lists.set(await this.api.request<SharedList[]>('/us/lists'));this.picking.set(true);}catch(error){this.api.error.set((error as Error).message);}finally{this.busy.set(false);}}
   async addToList(listId?:string){
     const text=(this.message.trim()||this.share.incoming()?.text||'').trim();if(!text)return;
     this.busy.set(true);try{const id=listId||(await this.api.request<SharedList>('/us/lists',{title:'Shared'})).id;
       for(const line of text.split('\n').map(item=>item.trim()).filter(Boolean).slice(0,30))await this.api.request(`/us/lists/${id}/items`,{title:line.slice(0,160)});
-      this.finish('us');}catch(error){this.api.error.set((error as Error).message);}finally{this.busy.set(false);}
+      this.finish('us','plans');}catch(error){this.api.error.set((error as Error).message);}finally{this.busy.set(false);}
   }
 }

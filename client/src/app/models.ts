@@ -13,3 +13,13 @@ export interface DailyQuestion {day:string;question:string;mine:string|null;part
 export interface QuestionHistory {day:string;question:string;answers:{user_id:string;name:string;answer:string}[]}
 export interface LoveNote {id:string;user_id:string;author_name:string;text:string|null;unlock_at:string;locked:boolean}
 export interface Nudge {id:string;user_id:string;name:string;created_at:string}
+export interface MoodDay {day:string;mine:{mood:string;note:string}|null;partner:{mood:string;note:string}|null;week:{day:string;mine:string|null;partner:string|null}[]}
+export interface QuizResults {mine:Record<string,{scores:Record<string,number>}>;partner:Record<string,{scores:Record<string,number>}>;partner_name:string}
+export interface PackState {pack:string;title:string;total:number;done:number;current:{idx:number;question:string;mine:string|null;partner_answered:boolean}|null;history:{idx:number;question:string;mine?:string;partner?:string}[]}
+export interface KnowRound {id:string;question:string;options:string[];about_me:boolean;answer:number|null;guess:number|null;correct:boolean|null;created_at:string}
+export interface KnowGame {to_guess:KnowRound[];waiting:KnowRound[];results:KnowRound[];score:{mine:number;mine_total:number;partner:number;partner_total:number};next:{index:number;question:string;options:string[]}}
+export interface JournalEntry {id:string;user_id:string;author_name:string;kind:'gratitude'|'private';text:string;created_at:string}
+export interface PartnerStatus {sharing_location:boolean;reunion:string|null;distance_km:number|null;partner:{name:string;timezone?:string;battery?:number|null;charging?:boolean|null;updated_at?:string;sharing_location?:boolean}}
+export interface Moment {id:string;user_id:string;sender_name:string;media_id:string;kind:'drawing'|'photo';caption:string;created_at:string}
+export interface GameSession {id:string;game:string;title:string;emoji:string;started_by:string;players:[string,string];state:any;finished:boolean;winner:string|null;turn:string|null;your_turn:boolean;updated_at:string}
+export interface GameLobby {catalog:{id:string;title:string;description:string;emoji:string;record:{wins:number;losses:number;draws:number}}[];active:GameSession[];recent:GameSession[]}

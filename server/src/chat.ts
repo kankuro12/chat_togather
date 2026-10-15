@@ -165,6 +165,12 @@ export function realtime(c:Context,bind?:(socket:import('socket.io').Socket)=>vo
     let lastTyping=0;
     let readingWrite=Promise.resolve();
     socket.on('chat:view',(active:unknown)=>{readingWrite=readingWrite.then(async()=>{try{await c.identity(socket.handshake.auth.token);if(!socket.connected)return;socket.data.chatReading=active===true;socket.data.chatViewedAt=Date.now();await c.run('INSERT INTO chat_reading VALUES(?,?) ON CONFLICT(session_hash) DO UPDATE SET expires_at=excluded.expires_at',socket.data.tokenHash,active===true?Date.now()+45000:0);}catch{socket.disconnect(true);}});});
+    let lastTouch=0;
+    socket.on('touch',async(active:unknown)=>{
+      try{await c.identity(socket.handshake.auth.token);}catch{socket.disconnect(true);return;}
+      if(typeof active!=='boolean'||(active&&Date.now()-lastTouch<150))return;lastTouch=Date.now();
+      socket.to(room).except(`user:${user.id}`).emit('touch',{user_id:user.id,name:user.name,active});
+    });
     socket.on('typing',async(active:unknown)=>{
       try{await c.identity(socket.handshake.auth.token);}catch{socket.disconnect(true);return;}
       if(typeof active!=='boolean'||Date.now()-lastTyping<500)return;lastTyping=Date.now();

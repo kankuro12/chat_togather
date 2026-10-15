@@ -21,6 +21,8 @@ test('Us tab: thinking of you, daily question, dates, lists, secret wishlist and
     await expect(B.page.locator('.answer',{hasText:'Asha'})).toContainText('Your laugh at breakfast');await expect(A.page.locator('.answer',{hasText:'Bikash'})).toContainText('Momo night');
 
     // Special dates with countdown and "together for".
+    // Dates, lists and wishes live under Plans.
+    for(const p of [A.page,B.page])await p.getByRole('tab',{name:'Plans',exact:true}).click();
     await A.page.getByRole('button',{name:'Add special date'}).click();const dialog=A.page.getByRole('dialog',{name:'New special date'});
     await expect(dialog.getByLabel('What is it?')).toHaveValue('together');await dialog.getByLabel('Title').fill('Our first date');
     const today=new Date();const started=new Date(Date.UTC(today.getFullYear()-2,today.getMonth(),today.getDate()));await dialog.getByLabel('Date').fill(started.toISOString().slice(0,10));await dialog.getByRole('button',{name:'Save'}).click();
@@ -40,16 +42,17 @@ test('Us tab: thinking of you, daily question, dates, lists, secret wishlist and
 
     // A love note stays completely hidden from Bikash until it opens.
     const later=new Date(Date.now()+3*86400000);const local=new Date(later.getTime()-later.getTimezoneOffset()*60000).toISOString().slice(0,16);
+    for(const p of [A.page,B.page])await p.getByRole('tab',{name:'Notes',exact:true}).click();
     await A.page.getByLabel('Love note',{exact:true}).fill('Open this on our trip ❤️');await A.page.getByLabel('Opens on').fill(local);await A.page.getByRole('button',{name:'Seal note'}).click();
-    await expect(A.page.locator('.note-list')).toContainText('Open this on our trip');
-    await expect(B.page.locator('.note-list')).toContainText('Seal a note for');await expect(B.page.getByText('Open this on our trip')).toHaveCount(0);await expect(B.page.locator('.note-list li.sealed')).toHaveCount(0);
+    await expect(A.page.locator('.us-notes .note-list')).toContainText('Open this on our trip');
+    await expect(B.page.locator('.us-notes .note-list')).toContainText('Seal a note for');await expect(B.page.getByText('Open this on our trip')).toHaveCount(0);await expect(B.page.locator('.us-notes .note-list li.sealed')).toHaveCount(0);
     await B.page.screenshot({path:'artifacts/us-375.png',fullPage:true});
 
     // Home shows what's next for the two of you.
     await B.page.getByRole('button',{name:'Home',exact:true}).click();await expect(B.page.locator('.home-agenda')).toContainText('Our first date');await expect(B.page.locator('.home-agenda')).toContainText('Together for 2 years');
     // The seven-item bottom bar still fits a small phone.
     await B.page.setViewportSize({width:320,height:700});expect(await B.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-    const tops=new Set<number>();for(const name of ['Home','Chat','Us','Choices','Memories']){const box=await B.page.getByRole('button',{name,exact:true}).boundingBox();expect(box!.width).toBeGreaterThanOrEqual(56);tops.add(Math.round(box!.y));}
+    const tops=new Set<number>();for(const name of ['Home','Chat','Us','Games','Choices','Memories']){const box=await B.page.getByRole('button',{name,exact:true}).boundingBox();expect(box!.width).toBeGreaterThanOrEqual(44);tops.add(Math.round(box!.y));}
     expect(tops.size,'the tabs sit in one row').toBe(1);
     // Plans and Trips moved from the phone bar to Home, with a way back.
     for(const name of ['Plans','Trips'])await expect(B.page.getByRole('button',{name,exact:true})).toBeHidden();
