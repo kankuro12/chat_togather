@@ -12,6 +12,8 @@ export class WidgetSync {
   constructor(){
     if(Capacitor.getPlatform()!=='android')return;
     effect(()=>{this.api.usVersion();if(this.api.pair())untracked(()=>void this.sync());});
+    // "Thinking of you" shows on the widget too (the native push handler does this while the app is closed).
+    effect(()=>{if(this.api.nudged()&&this.api.pair())untracked(()=>void this.sync());});
   }
   private async sync(){
     try{
@@ -20,7 +22,8 @@ export class WidgetSync {
       const start=dates.find(date=>date.kind==='together');const title=start?`Together ${together(start.date,today).split(', ')[0]}`:`You & ${partner}`;
       const next=dates.map(date=>{const day=nextOccurrence(date.date,today,!!date.yearly);return day?{title:date.title,days:dayNumber(day)-dayNumber(today)}:null;}).filter(Boolean).sort((a,b)=>a!.days-b!.days)[0];
       const fresh=moment.from_partner&&moment.from_partner.id!==this.lastMoment?moment.from_partner:null;
-      const subtitle=fresh?`${fresh.kind==='drawing'?'🎨':'📷'} From ${fresh.sender_name}${fresh.caption?' · '+fresh.caption:''}`:next?`${next.title}: ${next.days===0?'today 🎉':next.days===1?'tomorrow':'in '+next.days+' days'}`:'💗 Tap the heart to send love';
+      const nudge=this.api.nudged();const recentNudge=nudge&&Date.now()-nudge.at<6*3600_000?`💗 ${nudge.name||partner} is thinking of you · ${new Date(nudge.at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}`:'';
+      const subtitle=fresh?`${fresh.kind==='drawing'?'🎨':'📷'} From ${fresh.sender_name}${fresh.caption?' · '+fresh.caption:''}`:recentNudge?recentNudge:next?`${next.title}: ${next.days===0?'today 🎉':next.days===1?'tomorrow':'in '+next.days+' days'}`:'💗 Tap the heart to send love';
       const image=fresh?await this.picture(fresh.media_id):undefined;if(fresh)this.lastMoment=fresh.id;
       await NativeCalls.updateWidget({title,subtitle,...(image?{image}:{})});
     }catch{/* the widget keeps its last picture */}

@@ -12,7 +12,7 @@ export class ShareInbox {
   private api=inject(Api);private native=Capacitor.getPlatform()==='android';
   incoming=signal<SharedContent|null>(null);
   constructor(){
-    if(this.native){void this.takeNative();window.addEventListener('native-share',()=>void this.takeNative());}
+    if(this.native){void this.takeNative();void this.openLaunchPage();window.addEventListener('native-share',()=>void this.takeNative());}
     else if(location.hash.startsWith('#share'))void this.takeWeb();
     // Android lists the partner in the system share sheet, like a messenger contact.
     let published:string|undefined;
@@ -26,6 +26,8 @@ export class ShareInbox {
       this.incoming.set({text:data.text||'',files,skipped:data.skipped||0,direct:!!data.direct});
     }catch{this.api.error.set('Could not open what was shared. Try sharing it again.');}
   }
+  /** Opened from a notification or chat head while the app was closed: go to the screen it points to. */
+  private async openLaunchPage(){try{const {page}=await NativeCalls.takeLaunchPage();if(page&&/^[a-z]{2,20}$/.test(page))location.hash=page;}catch{/* older app build */}}
   private async takeWeb(){
     history.replaceState(null,'','#home');
     try{

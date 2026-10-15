@@ -9,15 +9,13 @@ export function buildPushMessage(tokens:string[],kind:string,event?:string,call?
   const title=text?.title||'Together';const body=text?.body||(kind==='choice'?'New choice from your partner.':'New message from your partner.');
   const tag=event?(kind==='choice'?'choice:'+event:event):undefined;
   const nativeCall=(kind==='call'||kind==='call_cancel')&&!!call;
-  const data={page,kind,...(event?{event}:{}),...(call?{call_id:call.id,call_kind:call.kind,caller_name:call.name,expires_at:String(call.expires)}:{}),...(text?{title,body}:{})};
-  // Private visibility lets Android's "hide sensitive content" lock-screen setting redact it too.
-  // Android handles calls and "thinking of you" itself (data-only), so they can ring or pop up even while the app is closed.
-  const androidNotification=nativeCall||kind==='nudge'||kind==='moment'?undefined:{title,body,visibility:'private' as const,...(tag?{tag}:{})};
+  const data={page,kind,...(event?{event}:{}),...(call?{call_id:call.id,call_kind:call.kind,caller_name:call.name,expires_at:String(call.expires)}:{}),title,body,...(tag?{tag}:{})};
+  // Android builds every notification itself (data-only): calls ring, "thinking of you" pops up, messages get a chat head.
   const ttl=kind==='call_cancel'?'30':String(Math.ceil(Math.max(0,(call?.expires||Date.now()+86400000)-Date.now())/1000));
   return {
     tokens,data,
     webpush:{headers:{Urgency:'high',TTL:ttl}},
-    android:{priority:'high',...(androidNotification?{notification:androidNotification}:{}),...(nativeCall&&kind==='call'&&call?{ttl:Math.max(0,call.expires-Date.now())}: {})},
+    android:{priority:'high',...(nativeCall&&kind==='call'&&call?{ttl:Math.max(0,call.expires-Date.now())}: {})},
     apns:{...(kind==='call_cancel'?{headers:{'apns-push-type':'background','apns-priority':'5'}}:{}),payload:{aps:{...(kind==='call_cancel'?{contentAvailable:true}:{sound:'default',alert:nativeCall&&call?{title:'Incoming '+call.kind+' call',body:call.name}:{title,body}})}}}
   };
 }

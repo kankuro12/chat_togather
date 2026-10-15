@@ -123,6 +123,6 @@ test('push text says what happened: chat text, media type and length, new choice
     assert.deepEqual(texts.at(-1),{title:'Alice',body:'Secret plan 2'});
     assert.deepEqual((await api.get('/api/notifications/settings').set(auth(alice))).body,{previews:false});
     const message=buildPushMessage(['device'],'message',text.body.id,undefined,{title:'Alice',body:'Dinner at 7?'});
-    assert.deepEqual(message.android?.notification,{title:'Alice',body:'Dinner at 7?',visibility:'private',tag:text.body.id});assert.equal(message.data?.body,'Dinner at 7?');
+    assert.equal(message.android?.notification,undefined);assert.equal(message.data?.title,'Alice');assert.equal(message.data?.tag,text.body.id);assert.equal(message.data?.body,'Dinner at 7?');
   }finally{await new Promise<void>(resolve=>app.io.close(()=>resolve()));await app.storage.close();await app.db.close();rmSync(uploadDir,{recursive:true,force:true});}
 });

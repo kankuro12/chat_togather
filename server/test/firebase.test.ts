@@ -4,11 +4,11 @@ import {buildPushMessage} from '../src/firebase.js';
 
 test('push payload keeps web data-only and tags each event',()=>{
   const message=buildPushMessage(['device'],'choice','decision-1');
-  assert.deepEqual(message.data,{page:'choices',kind:'choice',event:'decision-1'});
+  assert.deepEqual(message.data,{page:'choices',kind:'choice',event:'decision-1',title:'Together',body:'New choice from your partner.',tag:'choice:decision-1'});
   assert.equal(message.webpush?.headers?.Urgency,'high');
   assert.equal(message.webpush?.notification,undefined);
   assert.equal(message.android?.priority,'high');
-  assert.equal(message.android?.notification?.tag,'choice:decision-1');
+  assert.equal(message.android?.notification,undefined,'Android draws its own notifications');
 });
 
 test('call cancel carries data without an alert',()=>{
